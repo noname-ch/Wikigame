@@ -166,7 +166,10 @@ ol.trail li{overflow-wrap:anywhere}
 
   <!-- RACE -->
   <section id="vRace" hidden class="race">
-    <article class="article" id="article"><p style="color:#54595d">Artikel wird geladen …</p></article>
+    <div style="display:grid;gap:10px;min-width:0">
+      <div class="row" style="align-items:center"><button class="ghost" id="btnBack2">← Einen Schritt zurück</button><span class="tag" id="backHint"></span></div>
+      <article class="article" id="article"><p style="color:#54595d">Artikel wird geladen …</p></article>
+    </div>
     <aside class="panel">
       <div class="goalbox"><div class="label">Ziel</div><div class="t" id="goalTitle">–</div><div class="tag" id="startTitle"></div></div>
       <div class="stats">
@@ -175,7 +178,7 @@ ol.trail li{overflow-wrap:anywhere}
       </div>
       <div id="myDone" hidden class="sheet" style="padding:14px"></div>
       <div class="row" id="raceBtns">
-        <button class="quiet" id="btnBack">← Zurück (zählt)</button>
+        <button class="quiet" id="btnBack">← Zurück</button>
         <button class="quiet" id="btnGiveUp">Aufgeben</button>
       </div>
       <div class="sheet" style="padding:14px">
@@ -393,20 +396,26 @@ $("article").addEventListener("click",async e=>{
   t=t.replace(/_/g," ");
   await go(t);
 });
-async function go(t){
+async function go(t,back){
   const r=loadedRace;busy=true;
   const ov=document.createElement("div");ov.className="loading";ov.textContent="lädt …";$("article").appendChild(ov);
   try{
     if(t.includes(":")){const info=await resolveTitle(r.lang,t);if(!info||info.ns!==0){toast("Das ist kein Artikel (Datei, Kategorie usw.).");ov.remove();busy=false;return}t=info.title;}
     const page=await parsePage(r.lang,t);
     if(loadedRace!==r||!run||run.done||run.gaveUp){busy=false;return}
-    renderArticle(page);curTitle=page.title;run.path.push(page.title);
+    renderArticle(page);curTitle=page.title;
+    if(back){run.path.pop();}
+    else{run.path.push(page.title);try{history.pushState({wr:run.path.length},"")}catch(_){}}
     if(norm(page.title)===norm(r.goal)){run.done=true;run.ms=hostNow()-r.startAt;}
     sendRun();renderRace();
   }catch(e){ov.remove();toast("Artikel konnte nicht geladen werden.");}
   busy=false;
 }
-$("btnBack").onclick=()=>{if(!run||run.path.length<2||run.done||run.gaveUp||busy)return;go(run.path[run.path.length-2]);};
+function goBack(){if(!run||run.path.length<2||run.done||run.gaveUp||busy||!loadedRace)return;go(run.path[run.path.length-2],true);}
+$("btnBack").onclick=goBack;
+$("btnBack2").onclick=goBack;
+window.addEventListener("popstate",()=>{if(loadedRace&&run&&!run.done&&!run.gaveUp)goBack();});
+document.addEventListener("keydown",e=>{if(e.altKey&&e.key==="ArrowLeft"&&loadedRace){e.preventDefault();goBack();}});
 $("btnGiveUp").onclick=()=>{const b=$("btnGiveUp");if(!run||run.done||run.gaveUp)return;
   if(b.dataset.armed!=="1"){b.dataset.armed="1";b.textContent="Wirklich aufgeben?";setTimeout(()=>{b.dataset.armed="";b.textContent="Aufgeben"},3000);return}
   run.gaveUp=true;sendRun();renderRace();};
@@ -437,6 +446,9 @@ function renderRace(){
   $("trail").innerHTML=run?run.path.map((t,i)=>`<li>${esc(t)}${i===0?' <span class="tag">Start</span>':""}</li>`).join(""):"";
   const finished=run&&(run.done||run.gaveUp);
   $("raceBtns").hidden=!!finished;
+  const canBack=!!run&&run.path.length>1&&!finished;
+  $("btnBack").disabled=!canBack;$("btnBack2").disabled=!canBack;$("btnBack2").hidden=!!finished;
+  $("backHint").textContent=canBack?"zurück zu „"+run.path[run.path.length-2]+"“":"";
   const md=$("myDone");md.hidden=!finished;
   if(run&&run.done)md.innerHTML=`<div class="win">Im Ziel!</div><p class="note">${run.path.length-1} Klicks in ${fmt(run.ms)}</p>`;
   else if(run&&run.gaveUp)md.innerHTML=`<p class="note">Du hast aufgegeben. Schau den anderen in der Rangliste zu.</p>`;
