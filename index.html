@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+</head>
+<body>
+<title>Wikirace Lobby</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,500;7..72,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: one narrow column like an encyclopedia page; race view splits into "your trail" + "the field". */
+:root{
+  --paper:#f7f8fb; --sheet:#ffffff; --ink:#1b1f2a; --muted:#5b6275; --rule:#d9dde7;
+  --link:#2346c8; --link-soft:#e6ebfb; --flag:#d6452f; --ok:#1d8a55; --ok-soft:#e1f3ea;
+  --display:"Literata", Georgia, "Times New Roman", serif;
+  --body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#12151c; --sheet:#1a1e27; --ink:#e7e9f0; --muted:#9aa1b4; --rule:#2c3240;
+  --link:#8ea6ff; --link-soft:#222c4a; --flag:#ff7a63; --ok:#5fd29a; --ok-soft:#173326; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#12151c; --sheet:#1a1e27; --ink:#e7e9f0; --muted:#9aa1b4; --rule:#2c3240;
+  --link:#8ea6ff; --link-soft:#222c4a; --flag:#ff7a63; --ok:#5fd29a; --ok-soft:#173326; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
+.wrap{max-width:860px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 48px;display:grid;gap:22px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--rule);padding-bottom:12px}
+h1{font-family:var(--display);font-weight:700;font-size:2rem;margin:0;letter-spacing:-.01em}
+h1 .chk{display:inline-block;width:.7em;height:.7em;margin-left:.25em;vertical-align:.05em;background:conic-gradient(var(--ink) 25%,transparent 0 50%,var(--ink) 0 75%,transparent 0) 0 0/50% 50%;border:1px solid var(--ink)}
+.tag{font-family:var(--mono);font-size:.78rem;color:var(--muted)}
+h2{font-family:var(--display);font-weight:500;font-size:1.3rem;margin:0;text-wrap:balance}
+.label{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.sheet{background:var(--sheet);border:1px solid var(--rule);border-radius:6px;padding:20px;display:grid;gap:14px;min-width:0}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+.row>*{min-width:0}
+.field{display:grid;gap:4px;flex:1 1 200px}
+input,select{font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--rule);border-radius:4px;padding:9px 11px;width:100%}
+input:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--link);outline-offset:2px}
+button{font:inherit;font-weight:600;cursor:pointer;border-radius:4px;padding:9px 16px;border:1px solid var(--link);background:var(--link);color:var(--sheet)}
+button.ghost{background:transparent;color:var(--link)}
+button.quiet{background:transparent;color:var(--muted);border-color:var(--rule);font-weight:500}
+button:disabled{opacity:.45;cursor:not-allowed}
+a{color:var(--link)}
+.code{font-family:var(--mono);font-size:1.9rem;letter-spacing:.18em;color:var(--ink)}
+.matchup{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center}
+.matchup .arrow{font-family:var(--display);font-size:1.6rem;color:var(--muted)}
+.art{border:1px solid var(--rule);border-radius:6px;padding:12px 14px;background:var(--paper);min-width:0}
+.art .t{font-family:var(--display);font-size:1.15rem;overflow-wrap:anywhere}
+.art.goal{border-color:var(--flag)} .art.goal .label{color:var(--flag)}
+.players{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.players li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:8px 10px;border-radius:4px;background:var(--paper);min-width:0}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--muted)}
+.players .nm{overflow-wrap:anywhere}
+.pill{font-size:.72rem;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--link-soft);color:var(--link);white-space:nowrap}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.out{background:transparent;color:var(--muted);border:1px solid var(--rule)}
+.timer{font-family:var(--mono);font-size:2.4rem;font-variant-numeric:tabular-nums;line-height:1}
+.count{font-family:var(--display);font-size:5rem;text-align:center;line-height:1;color:var(--flag)}
+.grid2{display:grid;grid-template-columns:1.2fr 1fr;gap:18px}
+@media (max-width:720px){.grid2{grid-template-columns:1fr}.matchup{grid-template-columns:1fr}.matchup .arrow{transform:rotate(90deg);justify-self:center}}
+ol.trail{margin:0;padding-left:1.6em;display:grid;gap:3px;font-variant-numeric:tabular-nums}
+ol.trail li{overflow-wrap:anywhere}
+ol.trail li.last{font-weight:600}
+.note{color:var(--muted);font-size:.88rem;max-width:65ch}
+.board{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.board th{text-align:left;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--rule)}
+.board td{padding:8px;border-bottom:1px solid var(--rule);vertical-align:top;overflow-wrap:anywhere}
+.board td.num{font-family:var(--mono);text-align:right;white-space:nowrap}
+.tablebox{overflow-x:auto}
+.banner{padding:10px 14px;border-radius:4px;background:var(--link-soft);color:var(--ink);font-size:.9rem}
+.banner.warn{background:transparent;border:1px dashed var(--flag)}
+.win{font-family:var(--display);font-size:1.4rem;color:var(--ok)}
+@media (prefers-reduced-motion:no-preference){.count{animation:pop .9s ease-out infinite}@keyframes pop{0%{transform:scale(1.15);opacity:.6}30%{transform:scale(1);opacity:1}}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Wikirace<span class="chk" aria-hidden="true"></span></h1>
+    <span class="tag" id="conn">verbinde …</span>
+  </header>
+
+  <!-- ENTRY -->
+  <section id="vEntry" class="sheet">
+    <h2>Von einem Artikel zum anderen, nur über Links.</h2>
+    <p class="note">Erstelle eine Lobby oder tritt mit einem Code bei. Die Leitung legt Start- und Zielartikel fest, alle starten gleichzeitig. Gespielt wird auf Wikipedia in einem neuen Tab; hier trägst du jeden Artikel ein, auf dem du landest.</p>
+    <div class="field"><label class="label" for="inName">Dein Name</label><input id="inName" maxlength="24" placeholder="z. B. Lena" autocomplete="nickname"></div>
+    <div class="row">
+      <button id="btnCreate">Neue Lobby erstellen</button>
+      <span class="note">oder</span>
+      <div class="field" style="flex:0 1 160px"><label class="label" for="inCode">Lobby-Code</label><input id="inCode" maxlength="6" placeholder="ABCD" style="text-transform:uppercase;font-family:var(--mono);letter-spacing:.15em"></div>
+      <button id="btnJoin" class="ghost">Beitreten</button>
+    </div>
+    <div id="entryMsg" class="banner warn" hidden></div>
+  </section>
+
+  <!-- LOBBY -->
+  <section id="vLobby" hidden style="display:grid;gap:22px">
+    <div class="sheet">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <div><div class="label">Lobby-Code</div><div class="code" id="lobbyCode">----</div></div>
+        <div class="row"><button class="quiet" id="btnCopy">Code kopieren</button><button class="quiet" id="btnLeave">Verlassen</button></div>
+      </div>
+      <p class="note">Freunde öffnen diese Seite und geben den Code ein.</p>
+    </div>
+
+    <div class="grid2">
+      <div class="sheet">
+        <div class="label">Strecke</div>
+        <div id="cfgEdit" class="row" style="display:grid;gap:12px">
+          <div class="row">
+            <div class="field"><label class="label" for="inStart">Startartikel</label><input id="inStart" placeholder="z. B. Käsefondue"></div>
+            <div class="field"><label class="label" for="inGoal">Zielartikel</label><input id="inGoal" placeholder="z. B. Mondlandung"></div>
+          </div>
+          <div class="row">
+            <div class="field" style="flex:0 1 150px"><label class="label" for="inLang">Wikipedia</label>
+              <select id="inLang"><option value="de">Deutsch</option><option value="en">English</option><option value="fr">Français</option><option value="it">Italiano</option></select></div>
+            <button class="ghost" id="btnRandom">Zufällige Strecke</button>
+            <button id="btnStart">Rennen starten</button>
+          </div>
+        </div>
+        <div id="cfgView" hidden></div>
+        <div class="matchup" id="lobbyMatch"></div>
+        <div id="hostMsg" class="note"></div>
+      </div>
+      <div class="sheet">
+        <div class="label">Spieler <span id="pCount"></span></div>
+        <ul class="players" id="lobbyPlayers"></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- RACE -->
+  <section id="vRace" hidden style="display:grid;gap:22px">
+    <div class="sheet">
+      <div class="matchup" id="raceMatch"></div>
+      <div id="countdownBox" hidden><div class="count" id="countNum">5</div><p class="note" style="text-align:center;margin:0 auto">Gleich geht's los …</p></div>
+      <div id="goBox" class="row" style="justify-content:space-between;align-items:center">
+        <div><div class="label">Deine Zeit</div><div class="timer" id="timer">0:00.0</div></div>
+        <div><div class="label">Klicks</div><div class="timer" id="clicks">0</div></div>
+        <a id="openStart" href="#" target="_blank" rel="noopener"><button tabindex="-1">Startartikel öffnen ↗</button></a>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="sheet">
+        <div class="label">Dein Weg</div>
+        <form id="stepForm" class="row">
+          <div class="field"><label class="label" for="inStep">Ich bin jetzt bei …</label><input id="inStep" placeholder="Artikeltitel eintragen, Enter" autocomplete="off"></div>
+          <button type="submit">Eintragen</button>
+        </form>
+        <ol class="trail" id="trail"></ol>
+        <div class="row">
+          <button class="quiet" id="btnUndo">Letzten Schritt löschen</button>
+          <button class="quiet" id="btnGiveUp">Aufgeben</button>
+        </div>
+        <div id="myDone" hidden></div>
+        <p class="note">Tipp: Titel aus der Adresszeile oder der Überschrift kopieren. Sobald du den Zielartikel einträgst, bist du im Ziel.</p>
+      </div>
+      <div class="sheet">
+        <div class="label">Rangliste</div>
+        <div class="tablebox"><table class="board"><thead><tr><th>#</th><th>Spieler</th><th>Stand</th><th style="text-align:right">Klicks</th><th style="text-align:right">Zeit</th></tr></thead><tbody id="board"></tbody></table></div>
+        <button class="ghost" id="btnNewRound" hidden>Neue Runde</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const PAIRS={
+ de:[["Käsefondue","Mondlandung"],["Matterhorn","Elvis Presley"],["Bern","Pinguine"],["Schokolade","Schwarzes Loch"],["Albert Einstein","Fussball"],["Kaffee","Römisches Reich"],["Roger Federer","Vulkan"],["Toblerone","Dinosaurier"],["Aare","Japan"],["Fahrrad","Mozart"]],
+ en:[["Cheese fondue","Apollo 11"],["Matterhorn","Elvis Presley"],["Penguin","Roman Empire"],["Coffee","Black hole"],["Bicycle","Wolfgang Amadeus Mozart"],["Volcano","Tennis"]],
+ fr:[["Fondue","Apollo 11"],["Mont Blanc","Pingouin"],["Café","Empire romain"],["Vélo","Mozart"]],
+ it:[["Pizza","Apollo 11"],["Cervino","Pinguino"],["Caffè","Impero romano"],["Bicicletta","Mozart"]]
+};
+const norm=s=>String(s||"").replace(/_/g," ").replace(/\s+/g," ").trim().toLowerCase();
+const clean=s=>String(s||"").replace(/[\u0000-\u001f\u007f​-‏‪-‮⁠-⁤﻿]/g,"").replace(/_/g," ").replace(/\s+/g," ").trim().slice(0,80);
+const titleFromInput=s=>{s=String(s||"").trim();const m=s.match(/\/wiki\/([^?#]+)/);if(m){try{s=decodeURIComponent(m[1])}catch(e){s=m[1]}}return clean(s);};
+const wikiUrl=(lang,t)=>"https://"+(["de","en","fr","it"].includes(lang)?lang:"de")+".wikipedia.org/wiki/"+encodeURIComponent(String(t).replace(/ /g,"_"));
+const fmt=ms=>{if(ms==null||ms<0)ms=0;const m=Math.floor(ms/60000),s=Math.floor(ms%60000/1000),d=Math.floor(ms%1000/100);return m+":"+String(s).padStart(2,"0")+"."+d;};
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+let room=null, lobby=null, code=null, me={name:"",host:false};
+let cfg={start:"Käsefondue",goal:"Mondlandung",lang:"de"};
+let race=null;            // what the host published
+let run=null;             // my run {raceId,path,done,ms,gaveUp}
+let localPeers=[];        // fallback when solo
+let tick=null;
+
+try{me.name=localStorage.getItem("wr-name")||""}catch(e){}
+$("inName").value=me.name;
+const hash=(location.hash||"").replace("#","");
+if(/^[a-z]{4}$/i.test(hash))$("inCode").value=hash.toUpperCase();
+
+/* ---------- room connection ---------- */
+const connEl=$("conn");
+(async()=>{
+  try{room=window.claude&&await window.claude.use("room");}catch(e){room=null}
+  if(!room){connEl.textContent="Einzelspieler · keine Mehrspieler-Verbindung";return;}
+  room.onConnection(c=>{connEl.textContent=c?"verbunden":"verbinde …"},()=>{connEl.textContent="Einzelspieler · keine Mehrspieler-Verbindung";room=null});
+})();
+
+function show(v){["vEntry","vLobby","vRace"].forEach(id=>$(id).hidden=id!==v);}
+
+function entryMsg(t){const m=$("entryMsg");m.textContent=t;m.hidden=!t;}
+function needName(){const n=clean($("inName").value).slice(0,24);if(!n){entryMsg("Bitte zuerst einen Namen eingeben.");$("inName").focus();return null}me.name=n;try{localStorage.setItem("wr-name",n)}catch(e){}return n;}
+
+function makeCode(){const a="ABCDEFGHJKLMNPQRSTUVWXYZ";let s="";for(let i=0;i<4;i++)s+=a[Math.floor(Math.random()*a.length)];return s;}
+
+async function enter(c,asHost){
+  code=c; me.host=asHost; race=null; run=null;
+  $("lobbyCode").textContent=code;
+  if(room){
+    try{
+      lobby=await room.join("wr-"+code.toLowerCase());
+      lobby.onPeers(()=>render(),()=>{lobby=null;render()});
+    }catch(e){lobby=null;entryMsg("Beitritt nicht möglich ("+(e&&e.code||"Fehler")+"). Du spielst allein weiter.");}
+  }
+  pushPresence();
+  show("vLobby");render();
+}
+$("btnCreate").onclick=()=>{if(!needName())return;entryMsg("");enter(makeCode(),true);};
+$("btnJoin").onclick=()=>{if(!needName())return;const c=clean($("inCode").value).toUpperCase().replace(/[^A-Z]/g,"");if(c.length!==4){entryMsg("Der Lobby-Code hat 4 Buchstaben.");return}entryMsg("");enter(c,false);};
+$("inCode").addEventListener("keydown",e=>{if(e.key==="Enter")$("btnJoin").click()});
+$("btnLeave").onclick=async()=>{if(lobby){try{await lobby.leave()}catch(e){}}lobby=null;code=null;race=null;run=null;clearInterval(tick);show("vEntry");};
+$("btnCopy").onclick=()=>{const b=$("btnCopy");try{navigator.clipboard.writeText(code).then(()=>{b.textContent="Kopiert"},()=>{b.textContent=code});}catch(e){b.textContent=code}setTimeout(()=>b.textContent="Code kopieren",1600);};
+
+/* ---------- presence ---------- */
+function pushPresence(){
+  const p={name:me.name,host:me.host,cfg:me.host?cfg:null,race:me.host?race:null,run:run?{raceId:run.raceId,path:run.path.slice(-30),steps:run.path.length-1,done:run.done,ms:run.ms,gaveUp:run.gaveUp}:null};
+  if(lobby)lobby.presence(p).catch(()=>{});
+}
+function peers(){
+  if(lobby){return lobby.peers().map(p=>({peer:p.peer,me:p.sameTab,...(p.sameTab?{name:me.name,host:me.host,cfg:me.host?cfg:null,race:me.host?race:null,run:run&&{...run,steps:run.path.length-1}}:p.presence)}));}
+  return [{peer:"me",me:true,name:me.name,host:me.host,cfg:me.host?cfg:null,race:me.host?race:null,run:run&&{...run,steps:run.path.length-1}}];
+}
+function hostPeer(ps){const hs=ps.filter(p=>p.host).sort((a,b)=>a.peer<b.peer?-1:1);return hs[0]||null;}
+
+/* ---------- host controls ---------- */
+function readCfg(){cfg={start:titleFromInput($("inStart").value),goal:titleFromInput($("inGoal").value),lang:$("inLang").value};}
+["inStart","inGoal","inLang"].forEach(id=>$(id).addEventListener("input",()=>{readCfg();pushPresence();render();}));
+$("inStart").value=cfg.start;$("inGoal").value=cfg.goal;
+$("btnRandom").onclick=()=>{const list=PAIRS[$("inLang").value]||PAIRS.de;let p=list[Math.floor(Math.random()*list.length)];if(Math.random()<.5)p=[p[1],p[0]];$("inStart").value=p[0];$("inGoal").value=p[1];readCfg();pushPresence();render();};
+$("btnStart").onclick=()=>{readCfg();if(!cfg.start||!cfg.goal||norm(cfg.start)===norm(cfg.goal)){$("hostMsg").textContent="Start und Ziel müssen ausgefüllt und verschieden sein.";return}
+  race={id:Math.random().toString(36).slice(2,8),start:cfg.start,goal:cfg.goal,lang:cfg.lang,startAt:Date.now()+5000};pushPresence();render();};
+$("btnNewRound").onclick=()=>{race=null;run=null;pushPresence();render();};
+
+/* ---------- my run ---------- */
+function ensureRun(r){if(!run||run.raceId!==r.id){run={raceId:r.id,path:[r.start],done:false,ms:null,gaveUp:false};pushPresence();}}
+$("stepForm").addEventListener("submit",e=>{e.preventDefault();const r=currentRace();if(!r||!run||run.done||run.gaveUp||Date.now()<r.startAt)return;
+  const t=titleFromInput($("inStep").value);if(!t)return;$("inStep").value="";
+  if(norm(t)===norm(run.path[run.path.length-1]))return;
+  run.path.push(t);
+  if(norm(t)===norm(r.goal)){run.done=true;run.ms=Date.now()-r.startAt;}
+  pushPresence();render();});
+$("btnUndo").onclick=()=>{if(!run||run.done||run.gaveUp||run.path.length<2)return;run.path.pop();pushPresence();render();};
+$("btnGiveUp").onclick=()=>{if(!run||run.done)return;if($("btnGiveUp").dataset.armed!=="1"){$("btnGiveUp").dataset.armed="1";$("btnGiveUp").textContent="Wirklich aufgeben?";setTimeout(()=>{$("btnGiveUp").dataset.armed="";$("btnGiveUp").textContent="Aufgeben"},3000);return}
+  run.gaveUp=true;pushPresence();render();};
+
+function currentRace(){const h=hostPeer(peers());return h&&h.race&&h.race.id?h.race:null;}
+
+/* ---------- rendering ---------- */
+function matchHtml(c,lang){if(!c||!c.start)return "";return `<div class="art"><div class="label">Start</div><div class="t"><a href="${esc(wikiUrl(lang,c.start))}" target="_blank" rel="noopener">${esc(c.start)}</a></div></div><div class="arrow" aria-hidden="true">→</div><div class="art goal"><div class="label">Ziel</div><div class="t"><a href="${esc(wikiUrl(lang,c.goal))}" target="_blank" rel="noopener">${esc(c.goal)}</a></div></div>`;}
+
+function render(){
+  if(!code)return;
+  const ps=peers(); const host=hostPeer(ps); const r=currentRace();
+  // promote: if nobody hosts, offer myself
+  if(r){ensureRun(r);renderRace(ps,r);if(!tick)tick=setInterval(()=>{const rr=currentRace();if(rr)renderClock(rr)},100);return;}
+  clearInterval(tick);tick=null;show("vLobby");
+  const amHost=me.host;
+  $("cfgEdit").hidden=!amHost;
+  const c=amHost?cfg:(host&&host.cfg);
+  $("lobbyMatch").innerHTML=matchHtml(c,c&&c.lang);
+  $("hostMsg").innerHTML=amHost?"Du leitest diese Lobby.":(host?`<b>${esc(host.name||"Jemand")}</b> leitet die Lobby und startet das Rennen.`:`Niemand leitet gerade. <button class="ghost" id="btnTake">Leitung übernehmen</button>`);
+  const bt=$("btnTake");if(bt)bt.onclick=()=>{me.host=true;if(host&&host.cfg)cfg=host.cfg;$("inStart").value=cfg.start;$("inGoal").value=cfg.goal;$("inLang").value=cfg.lang;pushPresence();render();};
+  $("pCount").textContent="("+ps.length+")";
+  $("lobbyPlayers").innerHTML=ps.map(p=>`<li><span class="dot" style="background:${p.me?"var(--link)":"var(--muted)"}"></span><span class="nm">${esc(p.name||"Unbenannt")}${p.me?" <span class='tag'>(du)</span>":""}</span>${p.host?'<span class="pill">Leitung</span>':""}</li>`).join("");
+  if(!lobby&&!room)$("hostMsg").innerHTML+=`<div class="banner warn" style="margin-top:8px">Mehrspieler ist hier nicht verbunden. Andere sehen die Lobby, wenn sie angemeldet sind und du die Seite mit ihnen teilst.</div>`;
+}
+
+function renderClock(r){
+  const now=Date.now(); const pre=now<r.startAt;
+  $("countdownBox").hidden=!pre; $("goBox").hidden=pre; $("stepForm").querySelector("button").disabled=pre;
+  if(pre){$("countNum").textContent=Math.ceil((r.startAt-now)/1000);return;}
+  if(run&&!run.done&&!run.gaveUp)$("timer").textContent=fmt(now-r.startAt);
+  // live times on board
+  document.querySelectorAll("[data-live]").forEach(el=>el.textContent=fmt(now-r.startAt));
+}
+
+let lastPre=null;
+function renderRace(ps,r){
+  show("vRace");
+  $("raceMatch").innerHTML=matchHtml(r,r.lang);
+  $("openStart").href=wikiUrl(r.lang,r.start);
+  const pre=Date.now()<r.startAt;
+  if(lastPre&&!pre)$("inStep").focus();lastPre=pre;
+  $("clicks").textContent=run?run.path.length-1:0;
+  if(run&&run.done)$("timer").textContent=fmt(run.ms);
+  $("trail").innerHTML=run?run.path.map((t,i)=>`<li class="${i===run.path.length-1?"last":""}"><a href="${esc(wikiUrl(r.lang,t))}" target="_blank" rel="noopener">${esc(t)}</a>${i===0?' <span class="tag">Start</span>':""}</li>`).join(""):"";
+  const finished=run&&(run.done||run.gaveUp);
+  $("stepForm").hidden=finished;$("btnUndo").hidden=finished;$("btnGiveUp").hidden=finished;
+  const md=$("myDone");md.hidden=!finished;
+  if(run&&run.done)md.innerHTML=`<div class="win">Im Ziel! ${run.path.length-1} Klicks in ${fmt(run.ms)}</div>`;
+  else if(run&&run.gaveUp)md.innerHTML=`<div class="note">Du hast aufgegeben. Schau den anderen zu.</div>`;
+
+  const rows=ps.map(p=>{const rn=p.run&&p.run.raceId===r.id?p.run:null;return{p,rn}});
+  rows.sort((a,b)=>{const ra=a.rn,rb=b.rn;const ka=ra&&ra.done?0:ra&&!ra.gaveUp?1:2,kb=rb&&rb.done?0:rb&&!rb.gaveUp?1:2;if(ka!==kb)return ka-kb;if(ka===0)return(ra.ms-rb.ms)||(ra.steps-rb.steps);return((rb&&rb.steps)||0)-((ra&&ra.steps)||0);});
+  let place=0;
+  $("board").innerHTML=rows.map(({p,rn})=>{
+    const done=rn&&rn.done; if(done)place++;
+    const cur=rn&&rn.path&&rn.path.length?rn.path[rn.path.length-1]:"–";
+    const state=done?'<span class="pill ok">Im Ziel</span>':rn&&rn.gaveUp?'<span class="pill out">aufgegeben</span>':rn?`<span class="tag">bei</span> ${esc(cur)}`:'<span class="tag">wartet</span>';
+    const time=done?fmt(rn.ms):(rn&&!rn.gaveUp&&!pre?'<span data-live></span>':"–");
+    return `<tr><td class="num">${done?place:""}</td><td>${esc(p.name||"Unbenannt")}${p.me?" <span class='tag'>(du)</span>":""}</td><td>${state}</td><td class="num">${rn?rn.steps:"–"}</td><td class="num">${time}</td></tr>`;
+  }).join("");
+  const allOver=rows.every(x=>x.rn&&(x.rn.done||x.rn.gaveUp));
+  $("btnNewRound").hidden=!(me.host&&(allOver||(run&&(run.done||run.gaveUp))));
+  $("btnNewRound").textContent=allOver?"Neue Runde":"Rennen beenden & neue Runde";
+  renderClock(r);
+}
+})();
+</script>
+
+</body>
+</html>
