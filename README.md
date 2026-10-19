@@ -1,11 +1,19 @@
 # Wikirace
 
-Ein Wikipedia-Rennen für mehrere Spieler: Lobby erstellen oder per 4-Buchstaben-Code beitreten, Start- und Zielartikel festlegen und gleichzeitig losrennen. Gespielt wird auf Wikipedia in einem neuen Tab; auf der Seite trägt man jeden besuchten Artikel ein. Die Rangliste zeigt Klicks und Zeit live.
+Ein Wikipedia-Rennen für mehrere Spieler, direkt im Browser.
 
-## Hinweis
+- Lobby erstellen oder per 4-Buchstaben-Code bzw. Einladungslink beitreten (bis 16 Spieler)
+- Die Leitung legt Start- und Zielartikel fest (selbst eingeben, Klassiker oder ganz zufällig) in Deutsch, Englisch, Französisch oder Italienisch
+- Alle starten nach einem Countdown gleichzeitig; die Artikel laden direkt auf der Seite, jeder Link-Klick zählt
+- Live-Rangliste mit Klicks, Zeit und aktuellem Artikel aller Spieler
 
-Die Mehrspieler-Lobbys nutzen die Live-Verbindung von Claude-Artefakten (`window.claude.use("room")`). Außerhalb von Claude (z. B. auf GitHub Pages) lädt die Seite im Einzelspieler-Modus. Für Mehrspieler außerhalb von Claude braucht es ein eigenes Backend (z. B. Firebase oder einen WebSocket-Server).
+## Hosting
 
-## Starten
+Einfach `index.html` per GitHub Pages veröffentlichen: Settings → Pages → Deploy from branch `main` / root.
 
-`index.html` im Browser öffnen oder per GitHub Pages veröffentlichen.
+## Technik
+
+- Kein eigener Server nötig: Die Spieler verbinden sich per WebRTC direkt miteinander ([PeerJS](https://peerjs.com), Vermittlung über den kostenlosen PeerJS-Cloud-Server). Der Browser der Leitung hält den Spielstand.
+- Artikel kommen live über die Wikipedia-API.
+- Verlässt die Leitung die Seite, endet die Lobby.
+- In sehr strengen Netzwerken (manche Firmen- oder Schulnetze) kann die direkte Verbindung scheitern.

@@ -3,14 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-</head>
-<body>
 <title>Wikirace Lobby</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,500;7..72,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
-/* Layout: one narrow column like an encyclopedia page; race view splits into "your trail" + "the field". */
+/* Layout: lobby is one narrow column; the race is article (left) + race panel (right, sticky). */
 :root{
   --paper:#f7f8fb; --sheet:#ffffff; --ink:#1b1f2a; --muted:#5b6275; --rule:#d9dde7;
   --link:#2346c8; --link-soft:#e6ebfb; --flag:#d6452f; --ok:#1d8a55; --ok-soft:#e1f3ea;
@@ -18,15 +16,15 @@
   --body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+@media (prefers-color-scheme: dark){:root{
   --paper:#12151c; --sheet:#1a1e27; --ink:#e7e9f0; --muted:#9aa1b4; --rule:#2c3240;
   --link:#8ea6ff; --link-soft:#222c4a; --flag:#ff7a63; --ok:#5fd29a; --ok-soft:#173326; color-scheme:dark}}
-:root[data-theme="dark"]{
-  --paper:#12151c; --sheet:#1a1e27; --ink:#e7e9f0; --muted:#9aa1b4; --rule:#2c3240;
-  --link:#8ea6ff; --link-soft:#222c4a; --flag:#ff7a63; --ok:#5fd29a; --ok-soft:#173326; color-scheme:dark}
 *{box-sizing:border-box}
+html,body{margin:0}
 body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
+[hidden]{display:none!important}
 .wrap{max-width:860px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 48px;display:grid;gap:22px}
+.wrap.wide{max-width:1280px}
 header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--rule);padding-bottom:12px}
 h1{font-family:var(--display);font-weight:700;font-size:2rem;margin:0;letter-spacing:-.01em}
 h1 .chk{display:inline-block;width:.7em;height:.7em;margin-left:.25em;vertical-align:.05em;background:conic-gradient(var(--ink) 25%,transparent 0 50%,var(--ink) 0 75%,transparent 0) 0 0/50% 50%;border:1px solid var(--ink)}
@@ -44,7 +42,7 @@ button.ghost{background:transparent;color:var(--link)}
 button.quiet{background:transparent;color:var(--muted);border-color:var(--rule);font-weight:500}
 button:disabled{opacity:.45;cursor:not-allowed}
 a{color:var(--link)}
-.code{font-family:var(--mono);font-size:1.9rem;letter-spacing:.18em;color:var(--ink)}
+.code{font-family:var(--mono);font-size:1.9rem;letter-spacing:.18em}
 .matchup{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center}
 .matchup .arrow{font-family:var(--display);font-size:1.6rem;color:var(--muted)}
 .art{border:1px solid var(--rule);border-radius:6px;padding:12px 14px;background:var(--paper);min-width:0}
@@ -53,44 +51,79 @@ a{color:var(--link)}
 .players{list-style:none;margin:0;padding:0;display:grid;gap:6px}
 .players li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:8px 10px;border-radius:4px;background:var(--paper);min-width:0}
 .dot{width:10px;height:10px;border-radius:50%;background:var(--muted)}
-.players .nm{overflow-wrap:anywhere}
+.dot.me{background:var(--link)}
+.nm{overflow-wrap:anywhere}
 .pill{font-size:.72rem;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--link-soft);color:var(--link);white-space:nowrap}
 .pill.ok{background:var(--ok-soft);color:var(--ok)}
 .pill.out{background:transparent;color:var(--muted);border:1px solid var(--rule)}
-.timer{font-family:var(--mono);font-size:2.4rem;font-variant-numeric:tabular-nums;line-height:1}
-.count{font-family:var(--display);font-size:5rem;text-align:center;line-height:1;color:var(--flag)}
 .grid2{display:grid;grid-template-columns:1.2fr 1fr;gap:18px}
-@media (max-width:720px){.grid2{grid-template-columns:1fr}.matchup{grid-template-columns:1fr}.matchup .arrow{transform:rotate(90deg);justify-self:center}}
-ol.trail{margin:0;padding-left:1.6em;display:grid;gap:3px;font-variant-numeric:tabular-nums}
-ol.trail li{overflow-wrap:anywhere}
-ol.trail li.last{font-weight:600}
-.note{color:var(--muted);font-size:.88rem;max-width:65ch}
-.board{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
-.board th{text-align:left;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--rule)}
-.board td{padding:8px;border-bottom:1px solid var(--rule);vertical-align:top;overflow-wrap:anywhere}
-.board td.num{font-family:var(--mono);text-align:right;white-space:nowrap}
-.tablebox{overflow-x:auto}
-.banner{padding:10px 14px;border-radius:4px;background:var(--link-soft);color:var(--ink);font-size:.9rem}
+.note{color:var(--muted);font-size:.88rem;max-width:65ch;margin:0}
+.banner{padding:10px 14px;border-radius:4px;background:var(--link-soft);font-size:.9rem}
 .banner.warn{background:transparent;border:1px dashed var(--flag)}
-.win{font-family:var(--display);font-size:1.4rem;color:var(--ok)}
-@media (prefers-reduced-motion:no-preference){.count{animation:pop .9s ease-out infinite}@keyframes pop{0%{transform:scale(1.15);opacity:.6}30%{transform:scale(1);opacity:1}}}
-</style>
 
-<div class="wrap">
+/* race */
+.race{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start}
+.panel{position:sticky;top:12px;display:grid;gap:12px;max-height:calc(100vh - 24px);overflow:auto}
+.goalbox{border:2px solid var(--flag);border-radius:6px;padding:10px 12px;background:var(--sheet)}
+.goalbox .t{font-family:var(--display);font-size:1.25rem;overflow-wrap:anywhere}
+.goalbox .label{color:var(--flag)}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:var(--sheet);border:1px solid var(--rule);border-radius:6px;padding:8px 12px}
+.big{font-family:var(--mono);font-size:1.7rem;font-variant-numeric:tabular-nums;line-height:1.1}
+.board{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:.9rem}
+.board th{text-align:left;font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;padding:4px 6px;border-bottom:1px solid var(--rule)}
+.board td{padding:6px;border-bottom:1px solid var(--rule);vertical-align:top;overflow-wrap:anywhere}
+.board td.num{font-family:var(--mono);text-align:right;white-space:nowrap}
+.board .cur{display:block;color:var(--muted);font-size:.8rem}
+ol.trail{margin:0;padding-left:1.6em;display:grid;gap:2px;font-size:.9rem}
+ol.trail li{overflow-wrap:anywhere}
+.win{font-family:var(--display);font-size:1.4rem;color:var(--ok)}
+.countdown{position:fixed;inset:0;display:grid;place-items:center;background:color-mix(in srgb,var(--paper) 88%,transparent);z-index:20}
+.countdown .n{font-family:var(--display);font-size:8rem;color:var(--flag);line-height:1;text-align:center}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:8px 14px;border-radius:4px;font-size:.9rem;z-index:30;max-width:calc(100% - 32px)}
+
+/* the Wikipedia article itself stays on light paper, like Wikipedia */
+.article{background:#fff;color:#202122;border:1px solid var(--rule);border-radius:6px;padding:20px 24px;min-width:0;overflow-wrap:break-word;font-family:var(--body);font-size:15px;line-height:1.6;color-scheme:light;position:relative}
+.article h1.atitle{font-family:var(--display);font-size:2rem;font-weight:500;margin:0 0 12px;border-bottom:1px solid #a2a9b1;padding-bottom:6px;color:#202122}
+.article a{color:#3366cc;text-decoration:none}
+.article a:hover{text-decoration:underline}
+.article a.dead{color:#202122;cursor:default;text-decoration:none}
+.article h2,.article h3{font-family:var(--display);font-weight:500;color:#202122}
+.article h2{border-bottom:1px solid #a2a9b1;padding-bottom:4px;margin-top:1.4em}
+.article img{max-width:100%;height:auto}
+.article table{max-width:100%;border-collapse:collapse}
+.article .infobox,.article table.wikitable{display:block;overflow-x:auto}
+.article .infobox{float:right;clear:right;margin:0 0 12px 16px;max-width:300px;font-size:.85rem;background:#f8f9fa;border:1px solid #a2a9b1}
+.article figure,.article .thumb{float:right;clear:right;margin:4px 0 12px 16px;max-width:260px;font-size:.82rem}
+.article figure img{display:block}
+.article .mw-editsection,.article .mw-empty-elt,.article .noprint.portal,.article #toc,.article .toc{display:none}
+.article .navbox{font-size:.8rem;clear:both}
+.article .loading{position:absolute;inset:0;background:rgba(255,255,255,.7);display:grid;place-items:center;font-family:var(--mono);color:#54595d;border-radius:6px}
+@media (max-width:900px){
+  .race{grid-template-columns:1fr}
+  .panel{position:static;max-height:none;order:-1}
+  .article .infobox,.article figure,.article .thumb{float:none;margin:0 0 12px;max-width:100%}
+}
+@media (max-width:720px){.grid2{grid-template-columns:1fr}.matchup{grid-template-columns:1fr}.matchup .arrow{transform:rotate(90deg);justify-self:center}.article{padding:14px}}
+@media (prefers-reduced-motion:no-preference){.countdown .n{animation:pop .9s ease-out infinite}@keyframes pop{0%{transform:scale(1.15);opacity:.6}30%{transform:scale(1);opacity:1}}}
+</style>
+</head>
+<body>
+<div class="wrap" id="wrap">
   <header>
     <h1>Wikirace<span class="chk" aria-hidden="true"></span></h1>
-    <span class="tag" id="conn">verbinde …</span>
+    <span class="tag" id="conn">offline</span>
   </header>
 
   <!-- ENTRY -->
   <section id="vEntry" class="sheet">
     <h2>Von einem Artikel zum anderen, nur über Links.</h2>
-    <p class="note">Erstelle eine Lobby oder tritt mit einem Code bei. Die Leitung legt Start- und Zielartikel fest, alle starten gleichzeitig. Gespielt wird auf Wikipedia in einem neuen Tab; hier trägst du jeden Artikel ein, auf dem du landest.</p>
+    <p class="note">Erstelle eine Lobby oder tritt mit einem Code bei. Die Leitung legt Start- und Zielartikel fest, alle starten gleichzeitig. Gespielt wird direkt hier: Klicke dich durch die Wikipedia-Links, bis du beim Ziel bist. Jeder Klick zählt.</p>
     <div class="field"><label class="label" for="inName">Dein Name</label><input id="inName" maxlength="24" placeholder="z. B. Lena" autocomplete="nickname"></div>
     <div class="row">
       <button id="btnCreate">Neue Lobby erstellen</button>
       <span class="note">oder</span>
-      <div class="field" style="flex:0 1 160px"><label class="label" for="inCode">Lobby-Code</label><input id="inCode" maxlength="6" placeholder="ABCD" style="text-transform:uppercase;font-family:var(--mono);letter-spacing:.15em"></div>
+      <div class="field" style="flex:0 1 160px"><label class="label" for="inCode">Lobby-Code</label><input id="inCode" maxlength="4" placeholder="ABCD" style="text-transform:uppercase;font-family:var(--mono);letter-spacing:.15em"></div>
       <button id="btnJoin" class="ghost">Beitreten</button>
     </div>
     <div id="entryMsg" class="banner warn" hidden></div>
@@ -101,15 +134,14 @@ ol.trail li.last{font-weight:600}
     <div class="sheet">
       <div class="row" style="justify-content:space-between;align-items:center">
         <div><div class="label">Lobby-Code</div><div class="code" id="lobbyCode">----</div></div>
-        <div class="row"><button class="quiet" id="btnCopy">Code kopieren</button><button class="quiet" id="btnLeave">Verlassen</button></div>
+        <div class="row"><button class="ghost" id="btnShare">Einladungslink kopieren</button><button class="quiet" id="btnLeave">Verlassen</button></div>
       </div>
-      <p class="note">Freunde öffnen diese Seite und geben den Code ein.</p>
+      <p class="note" id="shareNote">Schick den Link oder den Code an deine Freunde.</p>
     </div>
-
     <div class="grid2">
       <div class="sheet">
         <div class="label">Strecke</div>
-        <div id="cfgEdit" class="row" style="display:grid;gap:12px">
+        <div id="cfgEdit" style="display:grid;gap:12px">
           <div class="row">
             <div class="field"><label class="label" for="inStart">Startartikel</label><input id="inStart" placeholder="z. B. Käsefondue"></div>
             <div class="field"><label class="label" for="inGoal">Zielartikel</label><input id="inGoal" placeholder="z. B. Mondlandung"></div>
@@ -117,13 +149,13 @@ ol.trail li.last{font-weight:600}
           <div class="row">
             <div class="field" style="flex:0 1 150px"><label class="label" for="inLang">Wikipedia</label>
               <select id="inLang"><option value="de">Deutsch</option><option value="en">English</option><option value="fr">Français</option><option value="it">Italiano</option></select></div>
-            <button class="ghost" id="btnRandom">Zufällige Strecke</button>
-            <button id="btnStart">Rennen starten</button>
+            <button class="ghost" id="btnClassic">Klassiker</button>
+            <button class="ghost" id="btnRandom">Ganz zufällig</button>
           </div>
+          <div class="row"><button id="btnStart">Rennen starten</button></div>
         </div>
-        <div id="cfgView" hidden></div>
         <div class="matchup" id="lobbyMatch"></div>
-        <div id="hostMsg" class="note"></div>
+        <p class="note" id="hostMsg"></p>
       </div>
       <div class="sheet">
         <div class="label">Spieler <span id="pCount"></span></div>
@@ -133,198 +165,301 @@ ol.trail li.last{font-weight:600}
   </section>
 
   <!-- RACE -->
-  <section id="vRace" hidden style="display:grid;gap:22px">
-    <div class="sheet">
-      <div class="matchup" id="raceMatch"></div>
-      <div id="countdownBox" hidden><div class="count" id="countNum">5</div><p class="note" style="text-align:center;margin:0 auto">Gleich geht's los …</p></div>
-      <div id="goBox" class="row" style="justify-content:space-between;align-items:center">
-        <div><div class="label">Deine Zeit</div><div class="timer" id="timer">0:00.0</div></div>
-        <div><div class="label">Klicks</div><div class="timer" id="clicks">0</div></div>
-        <a id="openStart" href="#" target="_blank" rel="noopener"><button tabindex="-1">Startartikel öffnen ↗</button></a>
+  <section id="vRace" hidden class="race">
+    <article class="article" id="article"><p style="color:#54595d">Artikel wird geladen …</p></article>
+    <aside class="panel">
+      <div class="goalbox"><div class="label">Ziel</div><div class="t" id="goalTitle">–</div><div class="tag" id="startTitle"></div></div>
+      <div class="stats">
+        <div class="stat"><div class="label">Zeit</div><div class="big" id="timer">0:00.0</div></div>
+        <div class="stat"><div class="label">Klicks</div><div class="big" id="clicks">0</div></div>
       </div>
-    </div>
-
-    <div class="grid2">
-      <div class="sheet">
-        <div class="label">Dein Weg</div>
-        <form id="stepForm" class="row">
-          <div class="field"><label class="label" for="inStep">Ich bin jetzt bei …</label><input id="inStep" placeholder="Artikeltitel eintragen, Enter" autocomplete="off"></div>
-          <button type="submit">Eintragen</button>
-        </form>
-        <ol class="trail" id="trail"></ol>
-        <div class="row">
-          <button class="quiet" id="btnUndo">Letzten Schritt löschen</button>
-          <button class="quiet" id="btnGiveUp">Aufgeben</button>
-        </div>
-        <div id="myDone" hidden></div>
-        <p class="note">Tipp: Titel aus der Adresszeile oder der Überschrift kopieren. Sobald du den Zielartikel einträgst, bist du im Ziel.</p>
+      <div id="myDone" hidden class="sheet" style="padding:14px"></div>
+      <div class="row" id="raceBtns">
+        <button class="quiet" id="btnBack">← Zurück (zählt)</button>
+        <button class="quiet" id="btnGiveUp">Aufgeben</button>
       </div>
-      <div class="sheet">
+      <div class="sheet" style="padding:14px">
         <div class="label">Rangliste</div>
-        <div class="tablebox"><table class="board"><thead><tr><th>#</th><th>Spieler</th><th>Stand</th><th style="text-align:right">Klicks</th><th style="text-align:right">Zeit</th></tr></thead><tbody id="board"></tbody></table></div>
+        <table class="board"><thead><tr><th>#</th><th>Spieler</th><th style="text-align:right">Klicks</th><th style="text-align:right">Zeit</th></tr></thead><tbody id="board"></tbody></table>
         <button class="ghost" id="btnNewRound" hidden>Neue Runde</button>
+        <p class="note" id="waitHost" hidden>Die Leitung startet die nächste Runde.</p>
       </div>
-    </div>
+      <div class="sheet" style="padding:14px">
+        <div class="label">Dein Weg</div>
+        <ol class="trail" id="trail"></ol>
+      </div>
+    </aside>
   </section>
 </div>
+<div class="countdown" id="countdown" hidden><div><div class="n" id="countNum">5</div><p class="note" style="text-align:center">Gleich geht's los …</p></div></div>
+<div class="toast" id="toast" hidden></div>
 
 <script>
 (function(){
 const $=id=>document.getElementById(id);
+const LANGS=["de","en","fr","it"];
 const PAIRS={
- de:[["Käsefondue","Mondlandung"],["Matterhorn","Elvis Presley"],["Bern","Pinguine"],["Schokolade","Schwarzes Loch"],["Albert Einstein","Fussball"],["Kaffee","Römisches Reich"],["Roger Federer","Vulkan"],["Toblerone","Dinosaurier"],["Aare","Japan"],["Fahrrad","Mozart"]],
+ de:[["Käsefondue","Mondlandung"],["Matterhorn","Elvis Presley"],["Bern","Pinguine"],["Schokolade","Schwarzes Loch"],["Albert Einstein","Fußball"],["Kaffee","Römisches Reich"],["Roger Federer","Vulkan"],["Toblerone","Dinosaurier"],["Aare","Japan"],["Fahrrad","Wolfgang Amadeus Mozart"]],
  en:[["Cheese fondue","Apollo 11"],["Matterhorn","Elvis Presley"],["Penguin","Roman Empire"],["Coffee","Black hole"],["Bicycle","Wolfgang Amadeus Mozart"],["Volcano","Tennis"]],
- fr:[["Fondue","Apollo 11"],["Mont Blanc","Pingouin"],["Café","Empire romain"],["Vélo","Mozart"]],
- it:[["Pizza","Apollo 11"],["Cervino","Pinguino"],["Caffè","Impero romano"],["Bicicletta","Mozart"]]
+ fr:[["Fondue","Apollo 11"],["Mont Blanc","Manchot"],["Café","Empire romain"],["Bicyclette","Wolfgang Amadeus Mozart"]],
+ it:[["Pizza","Apollo 11"],["Cervino","Spheniscidae"],["Caffè","Impero romano"],["Bicicletta","Wolfgang Amadeus Mozart"]]
 };
 const norm=s=>String(s||"").replace(/_/g," ").replace(/\s+/g," ").trim().toLowerCase();
-const clean=s=>String(s||"").replace(/[\u0000-\u001f\u007f​-‏‪-‮⁠-⁤﻿]/g,"").replace(/_/g," ").replace(/\s+/g," ").trim().slice(0,80);
-const titleFromInput=s=>{s=String(s||"").trim();const m=s.match(/\/wiki\/([^?#]+)/);if(m){try{s=decodeURIComponent(m[1])}catch(e){s=m[1]}}return clean(s);};
-const wikiUrl=(lang,t)=>"https://"+(["de","en","fr","it"].includes(lang)?lang:"de")+".wikipedia.org/wiki/"+encodeURIComponent(String(t).replace(/ /g,"_"));
+const clean=(s,n=120)=>String(s||"").replace(/[\u0000-\u001f\u007f​-‏‪-‮⁠-⁤﻿]/g,"").replace(/_/g," ").replace(/\s+/g," ").trim().slice(0,n);
 const fmt=ms=>{if(ms==null||ms<0)ms=0;const m=Math.floor(ms/60000),s=Math.floor(ms%60000/1000),d=Math.floor(ms%1000/100);return m+":"+String(s).padStart(2,"0")+"."+d;};
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const lang=l=>LANGS.includes(l)?l:"de";
+const wikiUrl=(l,t)=>"https://"+lang(l)+".wikipedia.org/wiki/"+encodeURIComponent(String(t).replace(/ /g,"_"));
+let toastT=null;function toast(t){const el=$("toast");el.textContent=t;el.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>el.hidden=true,2600);}
 
-let room=null, lobby=null, code=null, me={name:"",host:false};
-let cfg={start:"Käsefondue",goal:"Mondlandung",lang:"de"};
-let race=null;            // what the host published
-let run=null;             // my run {raceId,path,done,ms,gaveUp}
-let localPeers=[];        // fallback when solo
-let tick=null;
+/* ---------- Wikipedia API ---------- */
+function api(l,params){const u=new URL("https://"+lang(l)+".wikipedia.org/w/api.php");Object.entries({format:"json",formatversion:"2",origin:"*",...params}).forEach(([k,v])=>u.searchParams.set(k,v));return fetch(u).then(r=>{if(!r.ok)throw new Error("HTTP "+r.status);return r.json()});}
+async function resolveTitle(l,title){const j=await api(l,{action:"query",titles:title,redirects:"1"});const p=j.query&&j.query.pages&&j.query.pages[0];if(!p||p.missing||p.invalid)return null;return{title:p.title,ns:p.ns};}
+async function randomTitles(l){const j=await api(l,{action:"query",list:"random",rnnamespace:"0",rnlimit:"2"});return j.query.random.map(r=>r.title);}
+async function parsePage(l,title){const j=await api(l,{action:"parse",page:title,redirects:"1",prop:"text",disableeditsection:"1",disabletoc:"1"});if(j.error)throw new Error(j.error.info||"Artikel nicht gefunden");return{title:j.parse.title,html:j.parse.text};}
 
-try{me.name=localStorage.getItem("wr-name")||""}catch(e){}
-$("inName").value=me.name;
-const hash=(location.hash||"").replace("#","");
-if(/^[a-z]{4}$/i.test(hash))$("inCode").value=hash.toUpperCase();
+/* ---------- state ---------- */
+let peer=null, conns=new Map(), hostConn=null, isHost=false, myId="host", code=null, name="";
+let state=null;      // authoritative on host, mirror on guests
+let offset=0;        // host clock - local clock
+const hostNow=()=>Date.now()+offset;
+let run=null;        // my run
+let loadedRace=null, curTitle=null, busy=false, tick=null;
 
-/* ---------- room connection ---------- */
-const connEl=$("conn");
-(async()=>{
-  try{room=window.claude&&await window.claude.use("room");}catch(e){room=null}
-  if(!room){connEl.textContent="Einzelspieler · keine Mehrspieler-Verbindung";return;}
-  room.onConnection(c=>{connEl.textContent=c?"verbunden":"verbinde …"},()=>{connEl.textContent="Einzelspieler · keine Mehrspieler-Verbindung";room=null});
-})();
+try{name=localStorage.getItem("wr-name")||""}catch(e){}
+$("inName").value=name;
+const qp=new URLSearchParams(location.search).get("lobby");
+if(qp&&/^[a-z]{4}$/i.test(qp))$("inCode").value=qp.toUpperCase();
 
-function show(v){["vEntry","vLobby","vRace"].forEach(id=>$(id).hidden=id!==v);}
-
+function show(v){["vEntry","vLobby","vRace"].forEach(id=>$(id).hidden=id!==v);$("wrap").classList.toggle("wide",v==="vRace");}
 function entryMsg(t){const m=$("entryMsg");m.textContent=t;m.hidden=!t;}
-function needName(){const n=clean($("inName").value).slice(0,24);if(!n){entryMsg("Bitte zuerst einen Namen eingeben.");$("inName").focus();return null}me.name=n;try{localStorage.setItem("wr-name",n)}catch(e){}return n;}
-
+function setConn(t){$("conn").textContent=t;}
+function needName(){const n=clean($("inName").value,24);if(!n){entryMsg("Bitte zuerst einen Namen eingeben.");$("inName").focus();return null}name=n;try{localStorage.setItem("wr-name",n)}catch(e){}return n;}
 function makeCode(){const a="ABCDEFGHJKLMNPQRSTUVWXYZ";let s="";for(let i=0;i<4;i++)s+=a[Math.floor(Math.random()*a.length)];return s;}
+const peerId=c=>"wikirace-lobby-"+c.toLowerCase();
 
-async function enter(c,asHost){
-  code=c; me.host=asHost; race=null; run=null;
-  $("lobbyCode").textContent=code;
-  if(room){
-    try{
-      lobby=await room.join("wr-"+code.toLowerCase());
-      lobby.onPeers(()=>render(),()=>{lobby=null;render()});
-    }catch(e){lobby=null;entryMsg("Beitritt nicht möglich ("+(e&&e.code||"Fehler")+"). Du spielst allein weiter.");}
+/* ---------- host ---------- */
+function createLobby(tries=0){
+  if(typeof Peer==="undefined"){entryMsg("Die Verbindungsbibliothek konnte nicht geladen werden. Prüfe deine Internetverbindung.");return}
+  const c=makeCode();setConn("verbinde …");
+  const p=new Peer(peerId(c));
+  p.on("open",()=>{peer=p;isHost=true;myId="host";code=c;
+    state={cfg:{start:"Käsefondue",goal:"Mondlandung",lang:"de"},race:null,players:{host:{name,host:true,run:null}}};
+    $("inStart").value=state.cfg.start;$("inGoal").value=state.cfg.goal;$("inLang").value="de";
+    setConn("Lobby offen");show("vLobby");render();});
+  p.on("connection",conn=>{
+    conn.on("data",msg=>onGuestMsg(conn,msg));
+    conn.on("close",()=>{conns.delete(conn.peer);if(state&&state.players[conn.peer]){delete state.players[conn.peer];broadcast();}});
+    conn.on("error",()=>{});
+  });
+  p.on("error",err=>{
+    if(err.type==="unavailable-id"&&tries<5){p.destroy();createLobby(tries+1);return}
+    if(!peer){entryMsg("Lobby konnte nicht erstellt werden ("+err.type+"). Versuch es nochmal.");setConn("offline");p.destroy();}
+  });
+  p.on("disconnected",()=>{if(peer===p&&!p.destroyed){setConn("verbinde neu …");p.reconnect();}});
+}
+function onGuestMsg(conn,msg){
+  if(!msg||typeof msg!=="object"||!state)return;
+  if(msg.t==="hello"){
+    if(Object.keys(state.players).length>=16){conn.send({t:"full"});setTimeout(()=>conn.close(),300);return}
+    conns.set(conn.peer,conn);
+    state.players[conn.peer]={name:clean(msg.name,24)||"Unbenannt",host:false,run:null};
+    broadcast();
+  }else if(msg.t==="run"&&state.players[conn.peer]){
+    state.players[conn.peer].run=sanitizeRun(msg.run);broadcast();
   }
-  pushPresence();
-  show("vLobby");render();
 }
-$("btnCreate").onclick=()=>{if(!needName())return;entryMsg("");enter(makeCode(),true);};
-$("btnJoin").onclick=()=>{if(!needName())return;const c=clean($("inCode").value).toUpperCase().replace(/[^A-Z]/g,"");if(c.length!==4){entryMsg("Der Lobby-Code hat 4 Buchstaben.");return}entryMsg("");enter(c,false);};
+function sanitizeRun(r){if(!r||typeof r!=="object")return null;return{raceId:clean(r.raceId,16),path:Array.isArray(r.path)?r.path.slice(0,300).map(x=>clean(x)):[],done:!!r.done,ms:typeof r.ms==="number"?r.ms:null,gaveUp:!!r.gaveUp};}
+function broadcast(){if(!isHost)return;const msg={t:"state",state,now:Date.now()};conns.forEach(c=>{if(c.open)try{c.send(msg)}catch(e){}});onState();}
+
+/* ---------- guest ---------- */
+function joinLobby(c){
+  if(typeof Peer==="undefined"){entryMsg("Die Verbindungsbibliothek konnte nicht geladen werden. Prüfe deine Internetverbindung.");return}
+  setConn("verbinde …");entryMsg("");
+  const p=new Peer();
+  let opened=false;
+  const fail=t=>{if(opened)return;entryMsg(t);setConn("offline");try{p.destroy()}catch(e){}};
+  const to=setTimeout(()=>fail("Keine Antwort von der Lobby. Stimmt der Code?"),12000);
+  p.on("open",id=>{
+    const conn=p.connect(peerId(c),{reliable:true});
+    conn.on("open",()=>{opened=true;clearTimeout(to);peer=p;hostConn=conn;isHost=false;myId=id;code=c;conn.send({t:"hello",name});setConn("verbunden");});
+    conn.on("data",msg=>{
+      if(msg&&msg.t==="state"){offset=msg.now-Date.now();state=msg.state;if(!$("vEntry").hidden)show("vLobby");onState();}
+      else if(msg&&msg.t==="full"){leave();entryMsg("Diese Lobby ist voll (16 Spieler).");}
+    });
+    conn.on("close",()=>{if(hostConn===conn){leave();entryMsg("Die Verbindung zur Lobby wurde beendet. Die Leitung hat die Lobby vermutlich verlassen.");}});
+  });
+  p.on("error",err=>{if(err.type==="peer-unavailable")fail("Lobby „"+c+"“ nicht gefunden. Stimmt der Code?");else if(!opened)fail("Verbindung fehlgeschlagen ("+err.type+").");});
+}
+function sendRun(){
+  if(isHost){if(state&&state.players.host){state.players.host.run=run?{...run,path:run.path.slice()}:null;broadcast();}}
+  else if(hostConn&&hostConn.open){hostConn.send({t:"run",run});}
+}
+function leave(){
+  try{if(peer)peer.destroy()}catch(e){}
+  peer=null;hostConn=null;conns.clear();isHost=false;state=null;run=null;code=null;loadedRace=null;curTitle=null;offset=0;
+  clearInterval(tick);tick=null;$("countdown").hidden=true;setConn("offline");show("vEntry");
+}
+
+/* ---------- entry actions ---------- */
+$("btnCreate").onclick=()=>{if(!needName())return;entryMsg("");createLobby();};
+$("btnJoin").onclick=()=>{if(!needName())return;const c=$("inCode").value.toUpperCase().replace(/[^A-Z]/g,"");if(c.length!==4){entryMsg("Der Lobby-Code hat 4 Buchstaben.");return}joinLobby(c);};
 $("inCode").addEventListener("keydown",e=>{if(e.key==="Enter")$("btnJoin").click()});
-$("btnLeave").onclick=async()=>{if(lobby){try{await lobby.leave()}catch(e){}}lobby=null;code=null;race=null;run=null;clearInterval(tick);show("vEntry");};
-$("btnCopy").onclick=()=>{const b=$("btnCopy");try{navigator.clipboard.writeText(code).then(()=>{b.textContent="Kopiert"},()=>{b.textContent=code});}catch(e){b.textContent=code}setTimeout(()=>b.textContent="Code kopieren",1600);};
+$("btnLeave").onclick=leave;
+$("btnShare").onclick=()=>{const link=location.origin+location.pathname+"?lobby="+code;const b=$("btnShare");
+  const done=()=>{b.textContent="Kopiert";setTimeout(()=>b.textContent="Einladungslink kopieren",1600)};
+  try{navigator.clipboard.writeText(link).then(done,()=>{$("shareNote").textContent=link})}catch(e){$("shareNote").textContent=link}};
 
-/* ---------- presence ---------- */
-function pushPresence(){
-  const p={name:me.name,host:me.host,cfg:me.host?cfg:null,race:me.host?race:null,run:run?{raceId:run.raceId,path:run.path.slice(-30),steps:run.path.length-1,done:run.done,ms:run.ms,gaveUp:run.gaveUp}:null};
-  if(lobby)lobby.presence(p).catch(()=>{});
+/* ---------- host config ---------- */
+function cfgFromInputs(){if(!isHost||!state)return;state.cfg={start:clean($("inStart").value),goal:clean($("inGoal").value),lang:lang($("inLang").value)};}
+let cfgT=null;
+["inStart","inGoal","inLang"].forEach(id=>$(id).addEventListener("input",()=>{cfgFromInputs();renderLobby();clearTimeout(cfgT);cfgT=setTimeout(broadcast,300);}));
+$("btnClassic").onclick=()=>{const l=$("inLang").value;const list=PAIRS[l]||PAIRS.de;let p=list[Math.floor(Math.random()*list.length)];if(Math.random()<.5)p=[p[1],p[0]];$("inStart").value=p[0];$("inGoal").value=p[1];cfgFromInputs();broadcast();};
+$("btnRandom").onclick=async()=>{const b=$("btnRandom");b.disabled=true;try{const [a,z]=await randomTitles($("inLang").value);$("inStart").value=a;$("inGoal").value=z;cfgFromInputs();broadcast();}catch(e){toast("Wikipedia nicht erreichbar.")}b.disabled=false;};
+$("btnStart").onclick=async()=>{
+  cfgFromInputs();const c=state.cfg;const b=$("btnStart");
+  if(!c.start||!c.goal){$("hostMsg").textContent="Start und Ziel ausfüllen.";return}
+  b.disabled=true;$("hostMsg").textContent="Prüfe Artikel …";
+  try{
+    const [s,g]=await Promise.all([resolveTitle(c.lang,c.start),resolveTitle(c.lang,c.goal)]);
+    if(!s||s.ns!==0){$("hostMsg").textContent="Startartikel „"+c.start+"“ gibt es nicht.";b.disabled=false;return}
+    if(!g||g.ns!==0){$("hostMsg").textContent="Zielartikel „"+c.goal+"“ gibt es nicht.";b.disabled=false;return}
+    if(norm(s.title)===norm(g.title)){$("hostMsg").textContent="Start und Ziel sind derselbe Artikel.";b.disabled=false;return}
+    state.cfg={start:s.title,goal:g.title,lang:c.lang};$("inStart").value=s.title;$("inGoal").value=g.title;
+    Object.values(state.players).forEach(p=>p.run=null);
+    state.race={id:Math.random().toString(36).slice(2,8),start:s.title,goal:g.title,lang:c.lang,startAt:Date.now()+5000};
+    broadcast();
+  }catch(e){$("hostMsg").textContent="Wikipedia nicht erreichbar. Versuch es nochmal."}
+  b.disabled=false;
+};
+$("btnNewRound").onclick=()=>{if(!isHost)return;state.race=null;Object.values(state.players).forEach(p=>p.run=null);broadcast();};
+
+/* ---------- reacting to state ---------- */
+function onState(){
+  if(!state)return;
+  const r=state.race;
+  if(!r){if(loadedRace){loadedRace=null;run=null;curTitle=null;clearInterval(tick);tick=null;$("countdown").hidden=true;}show("vLobby");renderLobby();return;}
+  if(!loadedRace||loadedRace.id!==r.id){
+    loadedRace=r;curTitle=null;
+    const lateJoin=hostNow()>r.startAt+1500;
+    const mine=state.players[myId]&&state.players[myId].run;
+    if(mine&&mine.raceId===r.id){run={...mine,path:mine.path.slice()};}
+    else{run={raceId:r.id,path:[r.start],done:false,ms:null,gaveUp:false};sendRun();}
+    show("vRace");
+    $("article").innerHTML='<p style="color:#54595d">Startartikel wird vorbereitet …</p>';
+    preloadStart(r,run.path[run.path.length-1]);
+    clearInterval(tick);tick=setInterval(clockTick,100);
+    if(lateJoin)toast("Rennen läuft schon. Deine Zeit zählt ab dem Start.");
+  }
+  renderRace();
 }
-function peers(){
-  if(lobby){return lobby.peers().map(p=>({peer:p.peer,me:p.sameTab,...(p.sameTab?{name:me.name,host:me.host,cfg:me.host?cfg:null,race:me.host?race:null,run:run&&{...run,steps:run.path.length-1}}:p.presence)}));}
-  return [{peer:"me",me:true,name:me.name,host:me.host,cfg:me.host?cfg:null,race:me.host?race:null,run:run&&{...run,steps:run.path.length-1}}];
+let preloaded=null;
+async function preloadStart(r,title){try{preloaded={raceId:r.id,page:await parsePage(r.lang,title)};}catch(e){preloaded=null}if(hostNow()>=r.startAt)showStartIfNeeded();}
+function showStartIfNeeded(){
+  const r=loadedRace;if(!r||curTitle)return;
+  const t=run.path[run.path.length-1];
+  if(preloaded&&preloaded.raceId===r.id){renderArticle(preloaded.page);curTitle=preloaded.page.title;}
+  else{curTitle="…";parsePage(r.lang,t).then(p=>{renderArticle(p);curTitle=p.title}).catch(()=>{curTitle=null;$("article").innerHTML='<p>Artikel konnte nicht geladen werden. <button id="retry">Nochmal</button></p>';$("retry").onclick=showStartIfNeeded;});}
 }
-function hostPeer(ps){const hs=ps.filter(p=>p.host).sort((a,b)=>a.peer<b.peer?-1:1);return hs[0]||null;}
-
-/* ---------- host controls ---------- */
-function readCfg(){cfg={start:titleFromInput($("inStart").value),goal:titleFromInput($("inGoal").value),lang:$("inLang").value};}
-["inStart","inGoal","inLang"].forEach(id=>$(id).addEventListener("input",()=>{readCfg();pushPresence();render();}));
-$("inStart").value=cfg.start;$("inGoal").value=cfg.goal;
-$("btnRandom").onclick=()=>{const list=PAIRS[$("inLang").value]||PAIRS.de;let p=list[Math.floor(Math.random()*list.length)];if(Math.random()<.5)p=[p[1],p[0]];$("inStart").value=p[0];$("inGoal").value=p[1];readCfg();pushPresence();render();};
-$("btnStart").onclick=()=>{readCfg();if(!cfg.start||!cfg.goal||norm(cfg.start)===norm(cfg.goal)){$("hostMsg").textContent="Start und Ziel müssen ausgefüllt und verschieden sein.";return}
-  race={id:Math.random().toString(36).slice(2,8),start:cfg.start,goal:cfg.goal,lang:cfg.lang,startAt:Date.now()+5000};pushPresence();render();};
-$("btnNewRound").onclick=()=>{race=null;run=null;pushPresence();render();};
-
-/* ---------- my run ---------- */
-function ensureRun(r){if(!run||run.raceId!==r.id){run={raceId:r.id,path:[r.start],done:false,ms:null,gaveUp:false};pushPresence();}}
-$("stepForm").addEventListener("submit",e=>{e.preventDefault();const r=currentRace();if(!r||!run||run.done||run.gaveUp||Date.now()<r.startAt)return;
-  const t=titleFromInput($("inStep").value);if(!t)return;$("inStep").value="";
-  if(norm(t)===norm(run.path[run.path.length-1]))return;
-  run.path.push(t);
-  if(norm(t)===norm(r.goal)){run.done=true;run.ms=Date.now()-r.startAt;}
-  pushPresence();render();});
-$("btnUndo").onclick=()=>{if(!run||run.done||run.gaveUp||run.path.length<2)return;run.path.pop();pushPresence();render();};
-$("btnGiveUp").onclick=()=>{if(!run||run.done)return;if($("btnGiveUp").dataset.armed!=="1"){$("btnGiveUp").dataset.armed="1";$("btnGiveUp").textContent="Wirklich aufgeben?";setTimeout(()=>{$("btnGiveUp").dataset.armed="";$("btnGiveUp").textContent="Aufgeben"},3000);return}
-  run.gaveUp=true;pushPresence();render();};
-
-function currentRace(){const h=hostPeer(peers());return h&&h.race&&h.race.id?h.race:null;}
-
-/* ---------- rendering ---------- */
-function matchHtml(c,lang){if(!c||!c.start)return "";return `<div class="art"><div class="label">Start</div><div class="t"><a href="${esc(wikiUrl(lang,c.start))}" target="_blank" rel="noopener">${esc(c.start)}</a></div></div><div class="arrow" aria-hidden="true">→</div><div class="art goal"><div class="label">Ziel</div><div class="t"><a href="${esc(wikiUrl(lang,c.goal))}" target="_blank" rel="noopener">${esc(c.goal)}</a></div></div>`;}
-
-function render(){
-  if(!code)return;
-  const ps=peers(); const host=hostPeer(ps); const r=currentRace();
-  // promote: if nobody hosts, offer myself
-  if(r){ensureRun(r);renderRace(ps,r);if(!tick)tick=setInterval(()=>{const rr=currentRace();if(rr)renderClock(rr)},100);return;}
-  clearInterval(tick);tick=null;show("vLobby");
-  const amHost=me.host;
-  $("cfgEdit").hidden=!amHost;
-  const c=amHost?cfg:(host&&host.cfg);
-  $("lobbyMatch").innerHTML=matchHtml(c,c&&c.lang);
-  $("hostMsg").innerHTML=amHost?"Du leitest diese Lobby.":(host?`<b>${esc(host.name||"Jemand")}</b> leitet die Lobby und startet das Rennen.`:`Niemand leitet gerade. <button class="ghost" id="btnTake">Leitung übernehmen</button>`);
-  const bt=$("btnTake");if(bt)bt.onclick=()=>{me.host=true;if(host&&host.cfg)cfg=host.cfg;$("inStart").value=cfg.start;$("inGoal").value=cfg.goal;$("inLang").value=cfg.lang;pushPresence();render();};
-  $("pCount").textContent="("+ps.length+")";
-  $("lobbyPlayers").innerHTML=ps.map(p=>`<li><span class="dot" style="background:${p.me?"var(--link)":"var(--muted)"}"></span><span class="nm">${esc(p.name||"Unbenannt")}${p.me?" <span class='tag'>(du)</span>":""}</span>${p.host?'<span class="pill">Leitung</span>':""}</li>`).join("");
-  if(!lobby&&!room)$("hostMsg").innerHTML+=`<div class="banner warn" style="margin-top:8px">Mehrspieler ist hier nicht verbunden. Andere sehen die Lobby, wenn sie angemeldet sind und du die Seite mit ihnen teilst.</div>`;
-}
-
-function renderClock(r){
-  const now=Date.now(); const pre=now<r.startAt;
-  $("countdownBox").hidden=!pre; $("goBox").hidden=pre; $("stepForm").querySelector("button").disabled=pre;
-  if(pre){$("countNum").textContent=Math.ceil((r.startAt-now)/1000);return;}
+function clockTick(){
+  const r=loadedRace;if(!r)return;const now=hostNow();const pre=now<r.startAt;
+  $("countdown").hidden=!pre;
+  if(pre){$("countNum").textContent=Math.ceil((r.startAt-now)/1000);return}
+  if(!curTitle)showStartIfNeeded();
   if(run&&!run.done&&!run.gaveUp)$("timer").textContent=fmt(now-r.startAt);
-  // live times on board
   document.querySelectorAll("[data-live]").forEach(el=>el.textContent=fmt(now-r.startAt));
 }
 
-let lastPre=null;
-function renderRace(ps,r){
-  show("vRace");
-  $("raceMatch").innerHTML=matchHtml(r,r.lang);
-  $("openStart").href=wikiUrl(r.lang,r.start);
-  const pre=Date.now()<r.startAt;
-  if(lastPre&&!pre)$("inStep").focus();lastPre=pre;
+/* ---------- article ---------- */
+function renderArticle(page){
+  const a=$("article");
+  a.innerHTML='<h1 class="atitle">'+esc(page.title)+'</h1>'+page.html;
+  a.querySelectorAll("a").forEach(el=>{
+    const h=el.getAttribute("href")||"";
+    if(h.startsWith("#"))return;
+    if(!h.startsWith("/wiki/")||el.classList.contains("new"))el.classList.add("dead");
+  });
+  a.querySelectorAll("img").forEach(img=>{img.loading="lazy";});
+  window.scrollTo({top:a.getBoundingClientRect().top+window.scrollY-12});
+}
+$("article").addEventListener("click",async e=>{
+  const el=e.target.closest("a");if(!el)return;
+  const h=el.getAttribute("href")||"";
+  if(h.startsWith("#"))return;
+  e.preventDefault();
+  if(!loadedRace||!run||run.done||run.gaveUp||hostNow()<loadedRace.startAt||busy)return;
+  if(!h.startsWith("/wiki/")||el.classList.contains("new")){toast("Nur Links zu Wikipedia-Artikeln zählen.");return}
+  let t=h.slice(6).split("#")[0];try{t=decodeURIComponent(t)}catch(_){}
+  t=t.replace(/_/g," ");
+  await go(t);
+});
+async function go(t){
+  const r=loadedRace;busy=true;
+  const ov=document.createElement("div");ov.className="loading";ov.textContent="lädt …";$("article").appendChild(ov);
+  try{
+    if(t.includes(":")){const info=await resolveTitle(r.lang,t);if(!info||info.ns!==0){toast("Das ist kein Artikel (Datei, Kategorie usw.).");ov.remove();busy=false;return}t=info.title;}
+    const page=await parsePage(r.lang,t);
+    if(loadedRace!==r||!run||run.done||run.gaveUp){busy=false;return}
+    renderArticle(page);curTitle=page.title;run.path.push(page.title);
+    if(norm(page.title)===norm(r.goal)){run.done=true;run.ms=hostNow()-r.startAt;}
+    sendRun();renderRace();
+  }catch(e){ov.remove();toast("Artikel konnte nicht geladen werden.");}
+  busy=false;
+}
+$("btnBack").onclick=()=>{if(!run||run.path.length<2||run.done||run.gaveUp||busy)return;go(run.path[run.path.length-2]);};
+$("btnGiveUp").onclick=()=>{const b=$("btnGiveUp");if(!run||run.done||run.gaveUp)return;
+  if(b.dataset.armed!=="1"){b.dataset.armed="1";b.textContent="Wirklich aufgeben?";setTimeout(()=>{b.dataset.armed="";b.textContent="Aufgeben"},3000);return}
+  run.gaveUp=true;sendRun();renderRace();};
+
+/* ---------- rendering ---------- */
+function matchHtml(c){if(!c||!c.start)return "";return `<div class="art"><div class="label">Start</div><div class="t"><a href="${esc(wikiUrl(c.lang,c.start))}" target="_blank" rel="noopener">${esc(c.start)}</a></div></div><div class="arrow" aria-hidden="true">→</div><div class="art goal"><div class="label">Ziel</div><div class="t"><a href="${esc(wikiUrl(c.lang,c.goal))}" target="_blank" rel="noopener">${esc(c.goal)}</a></div></div>`;}
+function playerList(){return Object.entries(state.players).map(([id,p])=>({id,me:id===myId,...p}));}
+
+function renderLobby(){
+  if(!state)return;
+  $("lobbyCode").textContent=code;
+  $("cfgEdit").hidden=!isHost;
+  $("lobbyMatch").innerHTML=matchHtml(state.cfg);
+  const host=playerList().find(p=>p.host);
+  if(isHost){if(!$("hostMsg").textContent||$("hostMsg").dataset.k!=="h"){$("hostMsg").textContent="Du leitest diese Lobby.";$("hostMsg").dataset.k="h";}}
+  else $("hostMsg").textContent=(host?host.name:"Die Leitung")+" legt die Strecke fest und startet das Rennen.";
+  const ps=playerList();
+  $("pCount").textContent="("+ps.length+")";
+  $("lobbyPlayers").innerHTML=ps.map(p=>`<li><span class="dot ${p.me?"me":""}"></span><span class="nm">${esc(p.name)}${p.me?" <span class='tag'>(du)</span>":""}</span>${p.host?'<span class="pill">Leitung</span>':""}</li>`).join("");
+}
+
+function renderRace(){
+  const r=loadedRace;if(!r||!state)return;
+  $("goalTitle").textContent=r.goal;
+  $("startTitle").textContent="Start: "+r.start;
   $("clicks").textContent=run?run.path.length-1:0;
   if(run&&run.done)$("timer").textContent=fmt(run.ms);
-  $("trail").innerHTML=run?run.path.map((t,i)=>`<li class="${i===run.path.length-1?"last":""}"><a href="${esc(wikiUrl(r.lang,t))}" target="_blank" rel="noopener">${esc(t)}</a>${i===0?' <span class="tag">Start</span>':""}</li>`).join(""):"";
+  $("trail").innerHTML=run?run.path.map((t,i)=>`<li>${esc(t)}${i===0?' <span class="tag">Start</span>':""}</li>`).join(""):"";
   const finished=run&&(run.done||run.gaveUp);
-  $("stepForm").hidden=finished;$("btnUndo").hidden=finished;$("btnGiveUp").hidden=finished;
+  $("raceBtns").hidden=!!finished;
   const md=$("myDone");md.hidden=!finished;
-  if(run&&run.done)md.innerHTML=`<div class="win">Im Ziel! ${run.path.length-1} Klicks in ${fmt(run.ms)}</div>`;
-  else if(run&&run.gaveUp)md.innerHTML=`<div class="note">Du hast aufgegeben. Schau den anderen zu.</div>`;
+  if(run&&run.done)md.innerHTML=`<div class="win">Im Ziel!</div><p class="note">${run.path.length-1} Klicks in ${fmt(run.ms)}</p>`;
+  else if(run&&run.gaveUp)md.innerHTML=`<p class="note">Du hast aufgegeben. Schau den anderen in der Rangliste zu.</p>`;
 
-  const rows=ps.map(p=>{const rn=p.run&&p.run.raceId===r.id?p.run:null;return{p,rn}});
-  rows.sort((a,b)=>{const ra=a.rn,rb=b.rn;const ka=ra&&ra.done?0:ra&&!ra.gaveUp?1:2,kb=rb&&rb.done?0:rb&&!rb.gaveUp?1:2;if(ka!==kb)return ka-kb;if(ka===0)return(ra.ms-rb.ms)||(ra.steps-rb.steps);return((rb&&rb.steps)||0)-((ra&&ra.steps)||0);});
+  const pre=hostNow()<r.startAt;
+  const rows=playerList().map(p=>({p,rn:p.run&&p.run.raceId===r.id?p.run:null}));
+  const k=x=>x.rn&&x.rn.done?0:x.rn&&!x.rn.gaveUp?1:2;
+  rows.sort((a,b)=>k(a)-k(b)||(k(a)===0?(a.rn.ms-b.rn.ms):((b.rn?b.rn.path.length:0)-(a.rn?a.rn.path.length:0))));
   let place=0;
   $("board").innerHTML=rows.map(({p,rn})=>{
-    const done=rn&&rn.done; if(done)place++;
-    const cur=rn&&rn.path&&rn.path.length?rn.path[rn.path.length-1]:"–";
-    const state=done?'<span class="pill ok">Im Ziel</span>':rn&&rn.gaveUp?'<span class="pill out">aufgegeben</span>':rn?`<span class="tag">bei</span> ${esc(cur)}`:'<span class="tag">wartet</span>';
+    const done=rn&&rn.done;if(done)place++;
+    const cur=rn&&rn.path.length?rn.path[rn.path.length-1]:"";
+    const sub=done?'<span class="pill ok">Im Ziel</span>':rn&&rn.gaveUp?'<span class="pill out">aufgegeben</span>':`<span class="cur">bei ${esc(cur||"–")}</span>`;
     const time=done?fmt(rn.ms):(rn&&!rn.gaveUp&&!pre?'<span data-live></span>':"–");
-    return `<tr><td class="num">${done?place:""}</td><td>${esc(p.name||"Unbenannt")}${p.me?" <span class='tag'>(du)</span>":""}</td><td>${state}</td><td class="num">${rn?rn.steps:"–"}</td><td class="num">${time}</td></tr>`;
+    return `<tr><td class="num">${done?place:""}</td><td>${esc(p.name)}${p.me?" <span class='tag'>(du)</span>":""} ${sub}</td><td class="num">${rn?rn.path.length-1:"–"}</td><td class="num">${time}</td></tr>`;
   }).join("");
   const allOver=rows.every(x=>x.rn&&(x.rn.done||x.rn.gaveUp));
-  $("btnNewRound").hidden=!(me.host&&(allOver||(run&&(run.done||run.gaveUp))));
+  $("btnNewRound").hidden=!(isHost&&(allOver||finished));
   $("btnNewRound").textContent=allOver?"Neue Runde":"Rennen beenden & neue Runde";
-  renderClock(r);
+  $("waitHost").hidden=isHost||!finished;
 }
+function render(){if(state&&state.race)onState();else renderLobby();}
 })();
 </script>
-
 </body>
 </html>
