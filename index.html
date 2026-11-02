@@ -266,7 +266,7 @@ function createLobby(tries=0){
   const to=setTimeout(()=>{if(phase!=="check"||!live())return;phase="fail";cl.end();entryMsg(NO_NET);setConn("offline");},12000);
   const announce=()=>cl.publish(b+"/host",JSON.stringify({host:myCid}),{qos:1,retain:true});
   cl.on("connect",()=>{
-    if(phase==="open"){announce();setConn("Lobby offen");return}
+    if(phase==="open"){announce();setConn("Lobby offen");broadcast();return}
     if(phase!=="check")return;
     cl.subscribe(b+"/host",{qos:1},()=>setTimeout(()=>{
       if(phase!=="check"||!live())return;
@@ -307,7 +307,7 @@ function joinLobby(c){
   const b=topic(c);
   const cl=connect({topic:b+"/up",payload:JSON.stringify({t:"bye",id:myCid}),retain:false,qos:1});
   supersede(cl);
-  let joined=false,hostSeen=false,over=false;
+  let joined=false,hostSeen=false,over=false,lost=null;
   const fail=t=>{if(joined||over||pending!==cl)return;over=true;clearTimeout(to);cl.end();entryMsg(t);setConn("offline");};
   const to=setTimeout(()=>fail(hostSeen?"Keine Antwort von der Lobby. Versuch es nochmal.":cl.connected?"Lobby „"+c+"“ nicht gefunden. Stimmt der Code?":NO_NET),10000);
   const hello=()=>cl.publish(b+"/up",JSON.stringify({t:"hello",id:myCid,name,run}),{qos:1});
@@ -318,11 +318,18 @@ function joinLobby(c){
   cl.on("message",(t,buf)=>{
     if(over)return;
     if(t===b+"/host"){
-      if(buf.length){if(!hostSeen){hostSeen=true;hello();}}
-      else if(joined&&client===cl){leave();entryMsg("Die Lobby wurde beendet. Die Leitung hat die Lobby vermutlich verlassen.");}
+      // empty presence = the host's last will: its connection dropped, give it time to come back
+      if(buf.length){
+        if(!hostSeen){hostSeen=true;hello();}
+        else if(lost){clearTimeout(lost);lost=null;if(client===cl){setConn("verbunden");hello();}}
+      }else if(joined&&client===cl&&!lost){
+        setConn("Leitung getrennt, warte …");
+        lost=setTimeout(()=>{if(client!==cl)return;leave();entryMsg("Die Verbindung zur Leitung ist abgebrochen.");},30000);
+      }
       return;
     }
     const msg=parse(buf);if(!msg)return;
+    if(msg.t==="closed"){if(joined&&client===cl){leave();entryMsg("Die Lobby wurde beendet. Die Leitung hat die Lobby verlassen.");}return}
     if(msg.t==="full"&&msg.to===myCid){fail("Diese Lobby ist voll (16 Spieler).");return}
     if(msg.t!=="state"||!msg.state||!msg.state.players)return;
     if(!joined){
@@ -340,7 +347,7 @@ function sendRun(){
 }
 function leave(){
   const cl=client;
-  if(cl)try{if(isHost)pub("/host",null,true);else pub("/up",{t:"bye",id:myCid});cl.end();}catch(e){}
+  if(cl)try{if(isHost){pub("/state",{t:"closed"});pub("/host",null,true);}else pub("/up",{t:"bye",id:myCid});cl.end();}catch(e){}
   client=null;pending=null;isHost=false;state=null;run=null;code=null;base="";loadedRace=null;curTitle=null;offset=0;
   clearInterval(tick);tick=null;$("countdown").hidden=true;setConn("offline");show("vEntry");
 }
