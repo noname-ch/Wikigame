@@ -13,7 +13,8 @@ Einfach `index.html` per GitHub Pages veröffentlichen: Settings → Pages → D
 
 ## Technik
 
-- Kein eigener Server nötig: Die Spieler verbinden sich per WebRTC direkt miteinander ([PeerJS](https://peerjs.com), Vermittlung über den kostenlosen PeerJS-Cloud-Server). Der Browser der Leitung hält den Spielstand.
+- Kein eigener Server nötig: Die Spieler tauschen Nachrichten über einen öffentlichen MQTT-Broker aus ([HiveMQ](https://www.hivemq.com/mqtt/public-mqtt-broker/), per verschlüsseltem WebSocket mit [MQTT.js](https://github.com/mqttjs/MQTT.js)). Das klappt auch zwischen verschiedenen Netzwerken, ohne direkte Verbindung. Der Browser der Leitung hält den Spielstand.
 - Artikel kommen live über die Wikipedia-API.
 - Verlässt die Leitung die Seite, endet die Lobby.
-- In sehr strengen Netzwerken (manche Firmen- oder Schulnetze) kann die direkte Verbindung scheitern.
+- Der Broker ist öffentlich, die Nachrichten (Namen, Artikel, Zeiten) sind also nicht privat. Für ein Spiel unter Freunden reicht das.
+- Manche sehr strengen Netzwerke (Firmen- oder Schulnetze) sperren den Port 8884; dann klappt die Verbindung dort nicht.

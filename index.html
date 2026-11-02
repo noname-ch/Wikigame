@@ -6,7 +6,7 @@
 <title>Wikirace Lobby</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,500;7..72,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <style>
 /* Layout: lobby is one narrow column; the race is article (left) + race panel (right, sticky). */
 :root{
@@ -222,7 +222,7 @@ async function randomTitles(l){const j=await api(l,{action:"query",list:"random"
 async function parsePage(l,title){const j=await api(l,{action:"parse",page:title,redirects:"1",prop:"text",disableeditsection:"1",disabletoc:"1"});if(j.error)throw new Error(j.error.info||"Artikel nicht gefunden");return{title:j.parse.title,html:j.parse.text};}
 
 /* ---------- state ---------- */
-let peer=null, conns=new Map(), hostConn=null, isHost=false, myId="host", code=null, name="";
+let client=null, pending=null, isHost=false, myId="host", code=null, base="", name="";
 let state=null;      // authoritative on host, mirror on guests
 let offset=0;        // host clock - local clock
 const hostNow=()=>Date.now()+offset;
@@ -239,70 +239,112 @@ function entryMsg(t){const m=$("entryMsg");m.textContent=t;m.hidden=!t;}
 function setConn(t){$("conn").textContent=t;}
 function needName(){const n=clean($("inName").value,24);if(!n){entryMsg("Bitte zuerst einen Namen eingeben.");$("inName").focus();return null}name=n;try{localStorage.setItem("wr-name",n)}catch(e){}return n;}
 function makeCode(){const a="ABCDEFGHJKLMNPQRSTUVWXYZ";let s="";for(let i=0;i<4;i++)s+=a[Math.floor(Math.random()*a.length)];return s;}
-const peerId=c=>"wikirace-lobby-"+c.toLowerCase();
+/* ---------- relay ----------
+   Everyone talks through a public MQTT broker over a secure WebSocket, so players on
+   different networks reach each other without a direct (WebRTC) connection.
+   Topics per lobby: /host (retained presence, cleared by the host's last will),
+   /up (guests → host), /state (host → everyone). */
+const BROKER="wss://broker.hivemq.com:8884/mqtt";
+const myCid="wr"+(Math.random().toString(36).slice(2)+"0000000000").slice(0,10);
+const okId=id=>typeof id==="string"&&/^wr[a-z0-9]{10}$/.test(id);
+const topic=c=>"noname-ch/wikirace/v1/"+c.toLowerCase();
+const parse=b=>{try{return JSON.parse(b.toString())}catch(e){return null}};
+const connect=will=>mqtt.connect(BROKER,{clientId:myCid,keepalive:15,reconnectPeriod:2000,connectTimeout:10000,will});
+const pub=(sub,obj,retain)=>{if(client)client.publish(base+sub,obj==null?"":JSON.stringify(obj),{qos:1,retain:!!retain});};
+const NO_LIB="Die Verbindungsbibliothek konnte nicht geladen werden. Prüfe deine Internetverbindung.";
+const NO_NET="Keine Verbindung zum Server. Prüfe deine Internetverbindung.";
+function supersede(cl){if(pending&&pending!==client)try{pending.end()}catch(e){}pending=cl;}
 
 /* ---------- host ---------- */
 function createLobby(tries=0){
-  if(typeof Peer==="undefined"){entryMsg("Die Verbindungsbibliothek konnte nicht geladen werden. Prüfe deine Internetverbindung.");return}
-  const c=makeCode();setConn("verbinde …");
-  const p=new Peer(peerId(c));
-  p.on("open",()=>{peer=p;isHost=true;myId="host";code=c;
-    state={cfg:{start:"Käsefondue",goal:"Mondlandung",lang:"de"},race:null,players:{host:{name,host:true,run:null}}};
-    $("inStart").value=state.cfg.start;$("inGoal").value=state.cfg.goal;$("inLang").value="de";
-    setConn("Lobby offen");show("vLobby");render();});
-  p.on("connection",conn=>{
-    conn.on("data",msg=>onGuestMsg(conn,msg));
-    conn.on("close",()=>{conns.delete(conn.peer);if(state&&state.players[conn.peer]){delete state.players[conn.peer];broadcast();}});
-    conn.on("error",()=>{});
+  if(typeof mqtt==="undefined"){entryMsg(NO_LIB);return}
+  const c=makeCode(),b=topic(c);setConn("verbinde …");
+  const cl=connect({topic:b+"/host",payload:"",retain:true,qos:1});
+  supersede(cl);
+  let phase="check";   // check → open, or taken (code in use, try another)
+  const live=()=>pending===cl||client===cl;
+  const to=setTimeout(()=>{if(phase!=="check"||!live())return;phase="fail";cl.end();entryMsg(NO_NET);setConn("offline");},12000);
+  const announce=()=>cl.publish(b+"/host",JSON.stringify({host:myCid}),{qos:1,retain:true});
+  cl.on("connect",()=>{
+    if(phase==="open"){announce();setConn("Lobby offen");return}
+    if(phase!=="check")return;
+    cl.subscribe(b+"/host",{qos:1},()=>setTimeout(()=>{
+      if(phase!=="check"||!live())return;
+      phase="open";clearTimeout(to);cl.unsubscribe(b+"/host");
+      client=cl;base=b;isHost=true;myId="host";code=c;
+      cl.subscribe(b+"/up",{qos:1});announce();
+      state={cfg:{start:"Käsefondue",goal:"Mondlandung",lang:"de"},race:null,players:{host:{name,host:true,run:null}}};
+      $("inStart").value=state.cfg.start;$("inGoal").value=state.cfg.goal;$("inLang").value="de";
+      setConn("Lobby offen");show("vLobby");render();
+    },1200));
   });
-  p.on("error",err=>{
-    if(err.type==="unavailable-id"&&tries<5){p.destroy();createLobby(tries+1);return}
-    if(!peer){entryMsg("Lobby konnte nicht erstellt werden ("+err.type+"). Versuch es nochmal.");setConn("offline");p.destroy();}
+  cl.on("message",(t,buf)=>{
+    if(t===b+"/host"){
+      if(phase!=="check"||!buf.length||!live())return;
+      phase="taken";clearTimeout(to);cl.end();
+      if(tries<5)createLobby(tries+1);else{entryMsg("Lobby konnte nicht erstellt werden. Versuch es nochmal.");setConn("offline");}
+    }else if(t===b+"/up"&&client===cl)onGuestMsg(parse(buf));
   });
-  p.on("disconnected",()=>{if(peer===p&&!p.destroyed){setConn("verbinde neu …");p.reconnect();}});
+  cl.on("offline",()=>{if(client===cl)setConn("verbinde neu …")});
 }
-function onGuestMsg(conn,msg){
-  if(!msg||typeof msg!=="object"||!state)return;
+function onGuestMsg(msg){
+  if(!msg||typeof msg!=="object"||!state||!okId(msg.id))return;
+  const id=msg.id,p=state.players[id];
   if(msg.t==="hello"){
-    if(Object.keys(state.players).length>=16){conn.send({t:"full"});setTimeout(()=>conn.close(),300);return}
-    conns.set(conn.peer,conn);
-    state.players[conn.peer]={name:clean(msg.name,24)||"Unbenannt",host:false,run:null};
+    if(!p&&Object.keys(state.players).length>=16){pub("/state",{t:"full",to:id});return}
+    state.players[id]={name:clean(msg.name,24)||"Unbenannt",host:false,run:msg.run?sanitizeRun(msg.run):p?p.run:null};
     broadcast();
-  }else if(msg.t==="run"&&state.players[conn.peer]){
-    state.players[conn.peer].run=sanitizeRun(msg.run);broadcast();
-  }
+  }else if(msg.t==="run"&&p){p.run=sanitizeRun(msg.run);broadcast();}
+  else if(msg.t==="bye"&&p){delete state.players[id];broadcast();}
 }
 function sanitizeRun(r){if(!r||typeof r!=="object")return null;return{raceId:clean(r.raceId,16),path:Array.isArray(r.path)?r.path.slice(0,300).map(x=>clean(x)):[],done:!!r.done,ms:typeof r.ms==="number"?r.ms:null,gaveUp:!!r.gaveUp};}
-function broadcast(){if(!isHost)return;const msg={t:"state",state,now:Date.now()};conns.forEach(c=>{if(c.open)try{c.send(msg)}catch(e){}});onState();}
+function broadcast(){if(!isHost)return;pub("/state",{t:"state",state,now:Date.now()});onState();}
 
 /* ---------- guest ---------- */
 function joinLobby(c){
-  if(typeof Peer==="undefined"){entryMsg("Die Verbindungsbibliothek konnte nicht geladen werden. Prüfe deine Internetverbindung.");return}
+  if(typeof mqtt==="undefined"){entryMsg(NO_LIB);return}
   setConn("verbinde …");entryMsg("");
-  const p=new Peer();
-  let opened=false;
-  const fail=t=>{if(opened)return;entryMsg(t);setConn("offline");try{p.destroy()}catch(e){}};
-  const to=setTimeout(()=>fail("Keine Antwort von der Lobby. Stimmt der Code?"),12000);
-  p.on("open",id=>{
-    const conn=p.connect(peerId(c),{reliable:true});
-    conn.on("open",()=>{opened=true;clearTimeout(to);peer=p;hostConn=conn;isHost=false;myId=id;code=c;conn.send({t:"hello",name});setConn("verbunden");});
-    conn.on("data",msg=>{
-      if(msg&&msg.t==="state"){offset=msg.now-Date.now();state=msg.state;if(!$("vEntry").hidden)show("vLobby");onState();}
-      else if(msg&&msg.t==="full"){leave();entryMsg("Diese Lobby ist voll (16 Spieler).");}
-    });
-    conn.on("close",()=>{if(hostConn===conn){leave();entryMsg("Die Verbindung zur Lobby wurde beendet. Die Leitung hat die Lobby vermutlich verlassen.");}});
+  const b=topic(c);
+  const cl=connect({topic:b+"/up",payload:JSON.stringify({t:"bye",id:myCid}),retain:false,qos:1});
+  supersede(cl);
+  let joined=false,hostSeen=false,over=false;
+  const fail=t=>{if(joined||over||pending!==cl)return;over=true;clearTimeout(to);cl.end();entryMsg(t);setConn("offline");};
+  const to=setTimeout(()=>fail(hostSeen?"Keine Antwort von der Lobby. Versuch es nochmal.":cl.connected?"Lobby „"+c+"“ nicht gefunden. Stimmt der Code?":NO_NET),10000);
+  const hello=()=>cl.publish(b+"/up",JSON.stringify({t:"hello",id:myCid,name,run}),{qos:1});
+  cl.on("connect",()=>{
+    if(joined){setConn("verbunden");hello();return}
+    cl.subscribe([b+"/host",b+"/state"],{qos:1});
   });
-  p.on("error",err=>{if(err.type==="peer-unavailable")fail("Lobby „"+c+"“ nicht gefunden. Stimmt der Code?");else if(!opened)fail("Verbindung fehlgeschlagen ("+err.type+").");});
+  cl.on("message",(t,buf)=>{
+    if(over)return;
+    if(t===b+"/host"){
+      if(buf.length){if(!hostSeen){hostSeen=true;hello();}}
+      else if(joined&&client===cl){leave();entryMsg("Die Lobby wurde beendet. Die Leitung hat die Lobby vermutlich verlassen.");}
+      return;
+    }
+    const msg=parse(buf);if(!msg)return;
+    if(msg.t==="full"&&msg.to===myCid){fail("Diese Lobby ist voll (16 Spieler).");return}
+    if(msg.t!=="state"||!msg.state||!msg.state.players)return;
+    if(!joined){
+      if(!msg.state.players[myCid]||pending!==cl)return;
+      joined=true;clearTimeout(to);client=cl;base=b;isHost=false;myId=myCid;code=c;setConn("verbunden");
+    }
+    if(client!==cl)return;
+    offset=msg.now-Date.now();state=msg.state;if(!$("vEntry").hidden)show("vLobby");onState();
+  });
+  cl.on("offline",()=>{if(client===cl)setConn("verbinde neu …")});
 }
 function sendRun(){
   if(isHost){if(state&&state.players.host){state.players.host.run=run?{...run,path:run.path.slice()}:null;broadcast();}}
-  else if(hostConn&&hostConn.open){hostConn.send({t:"run",run});}
+  else if(client){pub("/up",{t:"run",id:myCid,run});}
 }
 function leave(){
-  try{if(peer)peer.destroy()}catch(e){}
-  peer=null;hostConn=null;conns.clear();isHost=false;state=null;run=null;code=null;loadedRace=null;curTitle=null;offset=0;
+  const cl=client;
+  if(cl)try{if(isHost)pub("/host",null,true);else pub("/up",{t:"bye",id:myCid});cl.end();}catch(e){}
+  client=null;pending=null;isHost=false;state=null;run=null;code=null;base="";loadedRace=null;curTitle=null;offset=0;
   clearInterval(tick);tick=null;$("countdown").hidden=true;setConn("offline");show("vEntry");
 }
+window.addEventListener("pagehide",()=>{if(client)leave();});
 
 /* ---------- entry actions ---------- */
 $("btnCreate").onclick=()=>{if(!needName())return;entryMsg("");createLobby();};
@@ -364,9 +406,11 @@ function showStartIfNeeded(){
   if(preloaded&&preloaded.raceId===r.id){renderArticle(preloaded.page);curTitle=preloaded.page.title;}
   else{curTitle="…";parsePage(r.lang,t).then(p=>{renderArticle(p);curTitle=p.title}).catch(()=>{curTitle=null;$("article").innerHTML='<p>Artikel konnte nicht geladen werden. <button id="retry">Nochmal</button></p>';$("retry").onclick=showStartIfNeeded;});}
 }
+let lastPre=null;
 function clockTick(){
   const r=loadedRace;if(!r)return;const now=hostNow();const pre=now<r.startAt;
   $("countdown").hidden=!pre;
+  if(pre!==lastPre){lastPre=pre;renderRace();}
   if(pre){$("countNum").textContent=Math.ceil((r.startAt-now)/1000);return}
   if(!curTitle)showStartIfNeeded();
   if(run&&!run.done&&!run.gaveUp)$("timer").textContent=fmt(now-r.startAt);
